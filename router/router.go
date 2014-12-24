@@ -581,14 +581,14 @@ func (self *Net) Route() bool {
 	radius := self.radius + (self.pcb.track_gap * float32(self.pcb.resolution))
 	visited := make(Vectors, 0)
 	for index := 1; index < len(self.terminals); index++ {
-		starts := make(Vectors, 0)
+		starts := make(Vectors, 0, (len(self.terminals[0:index]) * self.pcb.depth))
 		for _, t := range self.terminals[0:index] {
 			for z := 0; z < self.pcb.depth; z++ {
 				x, y := int(t.Term.X), int(t.Term.Y)
 				starts = append(starts, Point{x, y, z})
 			}
 		}
-		ends := make(Vectors, 0)
+		ends := make(Vectors, 0, (len(self.terminals[index : index+1]) * self.pcb.depth))
 		for _, t := range self.terminals[index : index+1] {
 			for z := 0; z < self.pcb.depth; z++ {
 				x, y := t.Term.X, t.Term.Y
@@ -597,12 +597,11 @@ func (self *Net) Route() bool {
 		}
 		visited = merge_vectors(visited, starts)
 		self.pcb.Mark_distances(&self.pcb.routing_flood_vectors, radius, visited, ends)
-		end_nodes := make(sort_points, 0)
+		end_nodes := make(sort_points, 0, len(ends))
 		for _, node := range ends {
 			mark := self.pcb.Get_node(node)
 			end_nodes = insert_sort_point(end_nodes, node, float32(mark), false)
 		}
-
 		end := end_nodes[0].node
 		path := make(Vectors, 0)
 		path = append(path, end)
