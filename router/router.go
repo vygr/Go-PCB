@@ -138,9 +138,9 @@ func optimise_paths(paths Vectorss) Vectorss {
 	for _, path := range paths {
 		opt_path := make(Vectors, 0)
 		d := mymath.Point{0, 0, 0}
-		for p := range zip_2_vectors(path, path[1:]) {
-			p0 := mymath.Point{float32(p[0].X), float32(p[0].Y), float32(p[0].Z)}
-			p1 := mymath.Point{float32(p[1].X), float32(p[1].Y), float32(p[1].Z)}
+		for p := range zip_2_vectors(path[:], path[1:]) {
+			p0 := point_to_math_point(p[0])
+			p1 := point_to_math_point(p[1])
 			d1 := mymath.Normalise_3d(mymath.Sub_3d(p1, p0))
 			if !mymath.Equal(d1, d) {
 				opt_path = append(opt_path, p[0])
@@ -171,8 +171,8 @@ type Pcb struct {
 	height                int
 	depth                 int
 	stride                int
-	routing_flood_vectors Vectorss
-	routing_path_vectors  Vectorss
+	routing_flood_vectors *Vectorss
+	routing_path_vectors  *Vectorss
 	dfunc                 func(mymath.Point, mymath.Point) float32
 	resolution            int
 	verbosity             int
@@ -183,14 +183,14 @@ type Pcb struct {
 }
 
 //pcb methods
-func NewPcb(dims Dims, rfvs, rpvs Vectorss, dfunc func(mymath.Point, mymath.Point) float32,
+func NewPcb(dims Dims, rfvs, rpvs *Vectorss, dfunc func(mymath.Point, mymath.Point) float32,
 	res, verb int, tg float32) *Pcb {
 	p := Pcb{}
 	p.Init(dims, rfvs, rpvs, dfunc, res, verb, tg)
 	return &p
 }
 
-func (self *Pcb) Init(dims Dims, rfvs, rpvs Vectorss,
+func (self *Pcb) Init(dims Dims, rfvs, rpvs *Vectorss,
 	dfunc func(mymath.Point, mymath.Point) float32, res, verb int, tg float32) {
 	self.width = dims.Width
 	self.height = dims.Height
@@ -580,7 +580,7 @@ func (self *Net) Sub_terminal_collision_lines() {
 //add paths entries to spacial cache
 func (self *Net) Add_paths_collision_lines() {
 	for _, path := range self.paths {
-		for p := range zip_2_vectors(path, path[1:]) {
+		for p := range zip_2_vectors(path[:], path[1:]) {
 			p0 := point_to_math_point(p[0])
 			p1 := point_to_math_point(p[1])
 			self.pcb.layers.Add_line(p0, p1, self.radius)
@@ -591,7 +591,7 @@ func (self *Net) Add_paths_collision_lines() {
 //remove paths entries from spacial cache
 func (self *Net) Sub_paths_collision_lines() {
 	for _, path := range self.paths {
-		for p := range zip_2_vectors(path, path[1:]) {
+		for p := range zip_2_vectors(path[:], path[1:]) {
 			p0 := point_to_math_point(p[0])
 			p1 := point_to_math_point(p[1])
 			self.pcb.layers.Sub_line(p0, p1, self.radius)
@@ -629,7 +629,7 @@ func (self *Net) Route() bool {
 			}
 		}
 		visited = merge_vectors(visited, starts)
-		self.pcb.Mark_distances(&self.pcb.routing_flood_vectors, radius, visited, ends)
+		self.pcb.Mark_distances(self.pcb.routing_flood_vectors, radius, visited, ends)
 		end_nodes := make(sort_points, 0, len(ends))
 		for _, node := range ends {
 			mark := self.pcb.Get_node(node)
@@ -641,12 +641,12 @@ func (self *Net) Route() bool {
 		dv := mymath.Point{0, 0, 0}
 		for {
 			pn := path[len(path)-1]
-			if vectors_contain(visited, pn) {
+			if vectors_contain(visited[:], pn) {
 				break
 			}
 			nearer_nodes := make(Vectors, 0)
 			for node := range self.pcb.All_not_shorting(
-				self.pcb.All_nearer_sorted(&self.pcb.routing_path_vectors, pn, end, self.pcb.dfunc),
+				self.pcb.All_nearer_sorted(self.pcb.routing_path_vectors, pn, end, self.pcb.dfunc),
 				pn, radius) {
 				nearer_nodes = append(nearer_nodes, node)
 			}
@@ -657,7 +657,7 @@ func (self *Net) Route() bool {
 				return false
 			}
 			next_node := nearer_nodes[0]
-			if !vectors_contain(visited, next_node) {
+			if !vectors_contain(visited[:], next_node) {
 				for i := 1; i < len(nearer_nodes); i++ {
 					if vectors_contain(visited, nearer_nodes[i]) {
 						next_node = nearer_nodes[i]

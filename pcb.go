@@ -198,7 +198,7 @@ func main() {
 		mymath.Chebyshev_distance, mymath.Reciprical_distance, mymath.Random_distance}
 
 	dimensions := read_dimentions(reader)
-	pcb := router.NewPcb(dimensions, routing_flood_vectorss, routing_path_vectorss,
+	pcb := router.NewPcb(dimensions, &routing_flood_vectorss, &routing_path_vectorss,
 		dfuncs[arg_d], arg_r, arg_v, float32(arg_g))
 	for {
 		track, eof := read_track(reader)
