@@ -513,7 +513,7 @@ func (self *Net) Copy() *Net {
 	new_net.radius = self.radius
 	new_net.shift = 0
 	new_net.terminals = copy_terminals(self.terminals)
-	new_net.paths = optimise_paths(self.paths)
+	new_net.paths = optimise_paths(self.paths[:])
 	self.Remove()
 	return &new_net
 }
@@ -680,7 +680,7 @@ func (self *Net) Route() bool {
 		self.paths = append(self.paths, path)
 		self.pcb.Unmark_distances()
 	}
-	self.paths = optimise_paths(self.paths)
+	self.paths = optimise_paths(self.paths[:])
 	self.Add_paths_collision_lines()
 	self.Add_terminal_collision_lines()
 	return true
