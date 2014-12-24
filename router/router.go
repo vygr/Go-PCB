@@ -12,12 +12,14 @@ import (
 	"time"
 )
 
+//dimensions of pcb board in grid points/layers
 type Dims struct {
 	Width  int
 	Height int
 	Depth  int
 }
 
+//grid point and collections
 type Point struct {
 	X int
 	Y int
@@ -26,12 +28,14 @@ type Point struct {
 type Vectors []Point
 type Vectorss []Vectors
 
+//sortable point
 type sort_point struct {
 	mark float32
 	node Point
 }
 type sort_points []sort_point
 
+//zip two vectors
 func zip_2_vectors(p1, p2 Vectors) <-chan Vectors {
 	l1 := len(p1)
 	l2 := len(p2)
@@ -49,6 +53,7 @@ func zip_2_vectors(p1, p2 Vectors) <-chan Vectors {
 	return yield
 }
 
+//compare points
 func point_equal(n1, n2 Point) bool {
 	if n1.X != n2.X {
 		return false
@@ -62,10 +67,12 @@ func point_equal(n1, n2 Point) bool {
 	return true
 }
 
+//convert grid point to math point
 func point_to_math_point(p Point) mymath.Point {
 	return mymath.Point{float32(p.X),float32(p.Y),float32(p.Z)}
 }
 
+//is point in vector
 func vectors_contain(nodes Vectors, node Point) bool {
 	for i := 0; i < len(nodes); i++ {
 		if point_equal(nodes[i], node) {
@@ -75,6 +82,7 @@ func vectors_contain(nodes Vectors, node Point) bool {
 	return false
 }
 
+//add point to vector if not present
 func merge_point(nodes Vectors, node Point) Vectors {
 	if !vectors_contain(nodes, node) {
 		nodes = append(nodes, Point{node.X, node.Y, node.Z})
@@ -82,6 +90,7 @@ func merge_point(nodes Vectors, node Point) Vectors {
 	return nodes
 }
 
+//add all points in vector to vector if not present
 func merge_vectors(nodes Vectors, mnodes Vectors) Vectors {
 	for i := 0; i < len(mnodes); i++ {
 		nodes = merge_point(nodes, mnodes[i])
@@ -89,20 +98,16 @@ func merge_vectors(nodes Vectors, mnodes Vectors) Vectors {
 	return nodes
 }
 
-func copy_vectors(nodes Vectors) Vectors {
-	cn := make(Vectors, len(nodes), cap(nodes))
-	copy(cn, nodes)
-	return cn
-}
-
+//add sort point to sort_points
 func append_sort_point(nodes sort_points, node Point, mark float32) sort_points {
 	mn := sort_point{mark, node}
 	return append(nodes, mn)
 }
 
+//insert sort_point in ascending or descending order
 func insert_sort_point(nodes sort_points, node Point, mark float32, ad bool) sort_points {
 	if ad {
-		//assending
+		//ascending
 		for i := 0; i < len(nodes); i++ {
 			if nodes[i].mark <= mark {
 				mn := sort_point{mark, node}
@@ -113,7 +118,7 @@ func insert_sort_point(nodes sort_points, node Point, mark float32, ad bool) sor
 			}
 		}
 	} else {
-		//desending
+		//descending
 		for i := 0; i < len(nodes); i++ {
 			if nodes[i].mark >= mark {
 				mn := sort_point{mark, node}
@@ -127,6 +132,7 @@ func insert_sort_point(nodes sort_points, node Point, mark float32, ad bool) sor
 	return append_sort_point(nodes, node, mark)
 }
 
+//remove redundant points from paths
 func optimise_paths(paths Vectorss) Vectorss {
 	opt_paths := make(Vectorss, 0)
 	for _, path := range paths {
@@ -147,14 +153,13 @@ func optimise_paths(paths Vectorss) Vectorss {
 	return opt_paths
 }
 
+//netlist structures
 type Nets []*Net
-
 type Terminal struct {
 	Radius float32
 	Term   Point
 }
 type Terminals []Terminal
-
 type Track struct {
 	Radius float32
 	Terms  Terminals
@@ -225,14 +230,17 @@ func (self *Pcb) Copy() *Pcb {
 	return &new_pcb
 }
 
+//set grid point to value
 func (self *Pcb) Set_node(node Point, value int) {
 	self.nodes[(self.stride*node.Z)+(node.Y*self.width)+node.X] = value
 }
 
+//get grid point value
 func (self *Pcb) Get_node(node Point) int {
 	return self.nodes[(self.stride*node.Z)+(node.Y*self.width)+node.X]
 }
 
+//generate all grid points surrounding point
 func (self *Pcb) All_nodes(vectors *Vectorss, node Point) <-chan Point {
 	yield := make(chan Point, 16)
 	go func() {
@@ -252,6 +260,7 @@ func (self *Pcb) All_nodes(vectors *Vectorss, node Point) <-chan Point {
 	return yield
 }
 
+//generate all grid points surrounding point, that are not value 0
 func (self *Pcb) All_marked(vectors *Vectorss, node Point) <-chan sort_point {
 	yield := make(chan sort_point, 16)
 	go func() {
@@ -266,6 +275,7 @@ func (self *Pcb) All_marked(vectors *Vectorss, node Point) <-chan sort_point {
 	return yield
 }
 
+//generate all grid points surrounding point, that are value 0
 func (self *Pcb) All_not_marked(vectors *Vectorss, node Point) <-chan Point {
 	yield := make(chan Point, 16)
 	go func() {
@@ -279,6 +289,7 @@ func (self *Pcb) All_not_marked(vectors *Vectorss, node Point) <-chan Point {
 	return yield
 }
 
+//generate all grid points surrounding point, that are nearer the goal point, sorted
 func (self *Pcb) All_nearer_sorted(vectors *Vectorss, node, goal Point,
 	dfunc func(mymath.Point, mymath.Point) float32) <-chan Point {
 	yield := make(chan Point, 16)
@@ -300,6 +311,7 @@ func (self *Pcb) All_nearer_sorted(vectors *Vectorss, node, goal Point,
 	return yield
 }
 
+//generate all grid points surrounding point that are not shorting with an existing track
 func (self *Pcb) All_not_shorting(gather <-chan Point, node Point, radius float32) <-chan Point {
 	yield := make(chan Point, 16)
 	go func() {
@@ -315,6 +327,7 @@ func (self *Pcb) All_not_shorting(gather <-chan Point, node Point, radius float3
 	return yield
 }
 
+//flood fill distances from starts till ends covered
 func (self *Pcb) Mark_distances(vectors *Vectorss, radius float32, starts, ends Vectors) {
 	distance := 1
 	nodes := starts
@@ -323,7 +336,7 @@ func (self *Pcb) Mark_distances(vectors *Vectorss, radius float32, starts, ends 
 	}
 	for len(nodes) > 0 {
 		distance++
-		new_nodes := make(Vectors, 0)
+		new_nodes := make(Vectors, 0, 64)
 		for _, node := range nodes {
 			for new_node := range self.All_not_shorting(self.All_not_marked(vectors, node), node, radius) {
 				self.Set_node(new_node, distance)
@@ -343,14 +356,17 @@ func (self *Pcb) Mark_distances(vectors *Vectorss, radius float32, starts, ends 
 	}
 }
 
+//set all grid values back to 0
 func (self *Pcb) Unmark_distances() {
 	self.nodes = make([]int, self.stride*self.depth, self.stride*self.depth)
 }
 
+//add net
 func (self *Pcb) Add_track(t Track) {
 	self.netlist = append(self.netlist, NewNet(t.Terms, t.Radius, *self))
 }
 
+//move net to top of netlist
 func hoist_netlist(ns Nets, n int) Nets {
 	new_nets := make(Nets, 0, len(ns))
 	new_nets = append(new_nets, ns[n])
@@ -362,6 +378,7 @@ func hoist_netlist(ns Nets, n int) Nets {
 	return new_nets
 }
 
+//attempt to route board within time
 func (self *Pcb) Route(timeout float64) bool {
 	start_time := time.Now()
 	index := 0
@@ -401,6 +418,7 @@ func (self *Pcb) Route(timeout float64) bool {
 	return true
 }
 
+//cost of board in complexity terms
 func (self *Pcb) Cost() int {
 	sum := 0
 	for _, net := range self.netlist {
@@ -411,6 +429,7 @@ func (self *Pcb) Cost() int {
 	return sum
 }
 
+//shuffle order of netlist
 func shuffle_netlist(ns Nets) Nets {
 	new_nets := make(Nets, 0, len(ns))
 	for _, i := range rand.Perm(len(ns)) {
@@ -427,6 +446,7 @@ func (self *Pcb) Shuffle_netlist() {
 	self.netlist = shuffle_netlist(self.netlist)
 }
 
+//output dimensions of board for viewer app
 func (self *Pcb) Print() {
 	scale := 1.0 / float32(self.resolution)
 	fmt.Print("[")
@@ -436,6 +456,7 @@ func (self *Pcb) Print() {
 	fmt.Println("]")
 }
 
+//output netlist and paths of board for viewer app
 func (self *Pcb) Print_netlist() {
 	for _, net := range self.netlist {
 		net.Print()
@@ -459,6 +480,7 @@ func NewNet(terms Terminals, radius float32, pcb Pcb) *Net {
 	return &n
 }
 
+//scale terminal positions for resolution of grid
 func scale_terminals(terms Terminals, res int) Terminals {
 	for i:=0; i<len(terms); i++{
 		terms[i].Radius *= float32(res)
@@ -478,6 +500,7 @@ func (self *Net) Init(terms Terminals, radius float32, pcb Pcb) {
 	self.Remove()
 }
 
+//copy terminals
 func copy_terminals(terms Terminals) Terminals {
 	new_terms := make(Terminals, len(terms), cap(terms))
 	copy(new_terms, terms)
@@ -495,6 +518,7 @@ func (self *Net) Copy() *Net {
 	return &new_net
 }
 
+//shift terminal order
 func shift_terminals(terms Terminals, n int) Terminals {
 	l := len(terms)
 	n = n % l
@@ -507,6 +531,7 @@ func shift_terminals(terms Terminals, n int) Terminals {
 	return append(terms[n:l], terms[:n]...)
 }
 
+//next topology of terminals
 func (self *Net) Next_topology() bool {
 	self.shift += 1
 	self.terminals = shift_terminals(self.terminals, 1)
@@ -517,11 +542,13 @@ func (self *Net) Next_topology() bool {
 	return true
 }
 
+//reset terminals to original order
 func (self *Net) Reset_topology() {
 	self.terminals = shift_terminals(self.terminals, -self.shift)
 	self.shift = 0
 }
 
+//randomize order of terminals
 func shuffle_terminals(terms Terminals) Terminals {
 	new_terms := make(Terminals, 0, len(terms))
 	for _, i := range rand.Perm(len(terms)) {
@@ -534,6 +561,7 @@ func (self *Net) Shuffle_topology() {
 	self.terminals = shuffle_terminals(self.terminals)
 }
 
+//add terminal entries to spacial cache
 func (self *Net) Add_terminal_collision_lines() {
 	for _, node := range self.terminals {
 		r, x, y := node.Radius, float32(node.Term.X), float32(node.Term.Y)
@@ -541,6 +569,7 @@ func (self *Net) Add_terminal_collision_lines() {
 	}
 }
 
+//remove terminal entries from spacial cache
 func (self *Net) Sub_terminal_collision_lines() {
 	for _, node := range self.terminals {
 		r, x, y := node.Radius, float32(node.Term.X), float32(node.Term.Y)
@@ -548,26 +577,29 @@ func (self *Net) Sub_terminal_collision_lines() {
 	}
 }
 
+//add paths entries to spacial cache
 func (self *Net) Add_paths_collision_lines() {
 	for _, path := range self.paths {
 		for p := range zip_2_vectors(path, path[1:]) {
-			p0 := mymath.Point{float32(p[0].X), float32(p[0].Y), float32(p[0].Z)}
-			p1 := mymath.Point{float32(p[1].X), float32(p[1].Y), float32(p[1].Z)}
+			p0 := point_to_math_point(p[0])
+			p1 := point_to_math_point(p[1])
 			self.pcb.layers.Add_line(p0, p1, self.radius)
 		}
 	}
 }
 
+//remove paths entries from spacial cache
 func (self *Net) Sub_paths_collision_lines() {
 	for _, path := range self.paths {
 		for p := range zip_2_vectors(path, path[1:]) {
-			p0 := mymath.Point{float32(p[0].X), float32(p[0].Y), float32(p[0].Z)}
-			p1 := mymath.Point{float32(p[1].X), float32(p[1].Y), float32(p[1].Z)}
+			p0 := point_to_math_point(p[0])
+			p1 := point_to_math_point(p[1])
 			self.pcb.layers.Sub_line(p0, p1, self.radius)
 		}
 	}
 }
 
+//remove net entries from spacial grid, terminal
 func (self *Net) Remove() {
 	self.Sub_paths_collision_lines()
 	self.Sub_terminal_collision_lines()
@@ -575,6 +607,7 @@ func (self *Net) Remove() {
 	self.Add_terminal_collision_lines()
 }
 
+//attempt to route this net on the current boards state
 func (self *Net) Route() bool {
 	self.paths = make(Vectorss, 0)
 	self.Sub_terminal_collision_lines()
@@ -618,7 +651,7 @@ func (self *Net) Route() bool {
 				nearer_nodes = append(nearer_nodes, node)
 			}
 			if len(nearer_nodes) == 0 {
-				//no nearer node
+				//no nearer nodes
 				self.pcb.Unmark_distances()
 				self.Remove()
 				return false
@@ -653,6 +686,7 @@ func (self *Net) Route() bool {
 	return true
 }
 
+//output net, terminals and paths, for viewer app
 func (self *Net) Print() {
 	scale := 1.0 / float32(self.pcb.resolution)
 	fmt.Print("[")
