@@ -218,16 +218,13 @@ func main() {
 			continue
 		}
 		cost := pcb.Cost()
-		print("Cost=", cost)
 		if cost <= best_cost {
-			print("1-------")
 			best_cost = cost
 			best_pcb = pcb.Copy()
 		}
 		pcb.Shuffle_netlist()
 	}
 	if best_pcb != nil {
-		print("2-------")
 		best_pcb.Print_netlist()
 	} else {
 		fmt.Println("[]")
