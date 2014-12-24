@@ -128,7 +128,7 @@ func read_track(r *bufio.Reader) (router.Track, bool) {
 
 //setup first board, loop for white..black..white..black...
 func main() {
-	runtime.GOMAXPROCS(16)
+	runtime.GOMAXPROCS(1)
 
 	arg_infile := os.Stdin
 	var arg_t float64
