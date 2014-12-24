@@ -209,21 +209,25 @@ func main() {
 	}
 
 	pcb.Print()
-	best_cost := 0
+	best_cost := 1000000000
 	var best_pcb *router.Pcb
+	best_pcb = nil
 	for i := 0; i < arg_s; i++ {
 		if !pcb.Route(arg_t) {
 			pcb.Shuffle_netlist()
 			continue
 		}
 		cost := pcb.Cost()
+		print("Cost=", cost)
 		if cost <= best_cost {
+			print("1-------")
 			best_cost = cost
 			best_pcb = pcb.Copy()
 		}
 		pcb.Shuffle_netlist()
 	}
 	if best_pcb != nil {
+		print("2-------")
 		best_pcb.Print_netlist()
 	} else {
 		fmt.Println("[]")
