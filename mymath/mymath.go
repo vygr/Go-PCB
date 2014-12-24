@@ -253,23 +253,23 @@ func Distance_squared_to_line(p, p1, p2 Point) float32 {
 
 //specific vector stuff
 func Equal_2d(p1, p2 Point) bool {
-	if p1[0] != p2[0]{
+	if p1[0] != p2[0] {
 		return false
 	}
-	if p1[1] != p2[1]{
+	if p1[1] != p2[1] {
 		return false
 	}
 	return true
 }
 
 func Equal_3d(p1, p2 Point) bool {
-	if p1[0] != p2[0]{
+	if p1[0] != p2[0] {
 		return false
 	}
-	if p1[1] != p2[1]{
+	if p1[1] != p2[1] {
 		return false
 	}
-	if p1[2] != p2[2]{
+	if p1[2] != p2[2] {
 		return false
 	}
 	return true

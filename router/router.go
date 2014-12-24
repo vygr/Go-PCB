@@ -69,7 +69,7 @@ func point_equal(n1, n2 Point) bool {
 
 //convert grid point to math point
 func point_to_math_point(p Point) mymath.Point {
-	return mymath.Point{float32(p.X),float32(p.Y),float32(p.Z)}
+	return mymath.Point{float32(p.X), float32(p.Y), float32(p.Z)}
 }
 
 //is point in vector
@@ -201,7 +201,7 @@ func (self *Pcb) Init(dims Dims, rfvs, rpvs Vectorss,
 	self.resolution = res
 	self.verbosity = verb
 	self.track_gap = tg
-	self.layers = layer.NewLayers(layer.Layers_dims{self.width, self.height, self.depth}, 1.0/float32(res))
+	self.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(res))
 	self.netlist = nil
 	self.width *= res
 	self.height *= res
@@ -221,7 +221,7 @@ func (self *Pcb) Copy() *Pcb {
 	new_pcb.resolution = self.resolution
 	new_pcb.verbosity = self.verbosity
 	new_pcb.track_gap = self.track_gap
-	new_pcb.layers = layer.NewLayers(layer.Layers_dims{self.width, self.height, self.depth}, 1.0/float32(self.resolution))
+	new_pcb.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(self.resolution))
 	new_pcb.netlist = nil
 	for _, net := range self.netlist {
 		new_pcb.netlist = append(new_pcb.netlist, net.Copy())
@@ -482,7 +482,7 @@ func NewNet(terms Terminals, radius float32, pcb Pcb) *Net {
 
 //scale terminal positions for resolution of grid
 func scale_terminals(terms Terminals, res int) Terminals {
-	for i:=0; i<len(terms); i++{
+	for i := 0; i < len(terms); i++ {
 		terms[i].Radius *= float32(res)
 		terms[i].Term.X *= res
 		terms[i].Term.Y *= res
@@ -621,7 +621,7 @@ func (self *Net) Route() bool {
 				starts = append(starts, Point{x, y, z})
 			}
 		}
-		ends := make(Vectors, 0, (len(self.terminals[index : index+1]) * self.pcb.depth))
+		ends := make(Vectors, 0, (len(self.terminals[index:index+1]) * self.pcb.depth))
 		for _, t := range self.terminals[index : index+1] {
 			for z := 0; z < self.pcb.depth; z++ {
 				x, y := t.Term.X, t.Term.Y
