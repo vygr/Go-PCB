@@ -5,11 +5,11 @@ Go PCB router and solver
 
 Example command line would be:
 
-go run pcb.py netlist.pcb --v 1 | python view.py
+go run pcb.go --v 1 netlist.pcb | python view.py
 
 You can drop the output to a file and view it as an animation with:
 
-go run pcb.py netlist.pcb --v 1 > anim
+go run pcb.go --v 1 netlist.pcb 1 > anim
 python view.py anim
 
 -h or --help for help on either app.
