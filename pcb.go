@@ -17,6 +17,7 @@ import (
 	"strings"
 )
 
+//generate range of routing vectors
 func gen_vectors(vec_range, x_range, y_range int) <-chan router.Point {
 	yield := make(chan router.Point, 16)
 	go func() {
@@ -35,6 +36,7 @@ func gen_vectors(vec_range, x_range, y_range int) <-chan router.Point {
 	return yield
 }
 
+//read input till given byte appears
 func read_until(r *bufio.Reader, c byte) bool {
 	for {
 		b, err := r.ReadByte()
@@ -49,6 +51,7 @@ func read_until(r *bufio.Reader, c byte) bool {
 	}
 }
 
+//read width, height, depth of pcb
 func read_dimentions(r *bufio.Reader) router.Dims {
 	eof := read_until(r, '[')
 	if eof {
@@ -64,6 +67,7 @@ func read_dimentions(r *bufio.Reader) router.Dims {
 	return router.Dims{int(width), int(height), int(depth)}
 }
 
+//read one terminal, radius, x, y, z
 func read_terminal(r *bufio.Reader) router.Terminal {
 	eof := read_until(r, '(')
 	if eof {
@@ -86,6 +90,7 @@ func read_terminal(r *bufio.Reader) router.Terminal {
 	return router.Terminal{float32(radius), router.Point{int(x), int(y), int(z)}}
 }
 
+//read all terminals for one track
 func read_terminals(r *bufio.Reader) router.Terminals {
 	eof := read_until(r, '[')
 	if eof {
@@ -106,6 +111,7 @@ func read_terminals(r *bufio.Reader) router.Terminals {
 	return terminals
 }
 
+//read one track
 func read_track(r *bufio.Reader) (router.Track, bool) {
 	eof := read_until(r, '[')
 	if eof {
@@ -130,6 +136,7 @@ func read_track(r *bufio.Reader) (router.Track, bool) {
 func main() {
 	runtime.GOMAXPROCS(1)
 
+	//command line flags and defaults etc
 	arg_infile := os.Stdin
 	var arg_t float64
 	var arg_v int
@@ -140,7 +147,6 @@ func main() {
 	var arg_fr int
 	var arg_xr int
 	var arg_yr int
-
 	flag.Float64Var(&arg_t, "t", 600.0, "timeout in seconds, default 600")
 	flag.IntVar(&arg_v, "v", 0, "verbosity level 0..1, default 0")
 	flag.IntVar(&arg_s, "s", 1, "number of samples, default 1")
@@ -152,6 +158,7 @@ func main() {
 	flag.IntVar(&arg_yr, "yr", 1, "odd layer y range 0..5, default 1")
 	flag.Parse()
 
+	//input reader from default stdin or given file
 	if flag.NArg() > 0 {
 		//read access
 		file, err := os.Open(flag.Args()[0])
@@ -162,6 +169,7 @@ func main() {
 	}
 	reader := bufio.NewReader(arg_infile)
 
+	//create flooding and backtracking vectors
 	flood_range := arg_fr
 	flood_range_x_even_layer := arg_xr
 	flood_range_y_odd_layer := arg_yr
@@ -193,10 +201,12 @@ func main() {
 	}
 	routing_path_vectorss = append(routing_path_vectorss, routing_path_vectors)
 
+	//choose distance metric function
 	dfuncs := []func(mymath.Point, mymath.Point) float32{
 		mymath.Manhattan_distance, mymath.Squared_euclidean_distance, mymath.Euclidean_distance,
 		mymath.Chebyshev_distance, mymath.Reciprical_distance, mymath.Random_distance}
 
+	//create pcb object and populate with tracks from input
 	dimensions := read_dimentions(reader)
 	pcb := router.NewPcb(dimensions, &routing_flood_vectorss, &routing_path_vectorss,
 		dfuncs[arg_d], arg_r, arg_v, float32(arg_g))
@@ -208,6 +218,7 @@ func main() {
 		pcb.Add_track(track)
 	}
 
+	//run number of sample of solution and pick best one
 	pcb.Print_pcb()
 	best_cost := 1000000000
 	var best_pcb *router.Pcb
