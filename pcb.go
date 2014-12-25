@@ -208,7 +208,7 @@ func main() {
 		pcb.Add_track(track)
 	}
 
-	pcb.Print()
+	pcb.Print_pcb()
 	best_cost := 1000000000
 	var best_pcb *router.Pcb
 	best_pcb = nil
