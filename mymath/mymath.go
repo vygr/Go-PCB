@@ -517,7 +517,7 @@ func Thicken_path_2d(path Points, radius float32, capstyle, joinstyle int) Point
 	index := 0
 	step := 1
 	out_points := Points{}
-	resolution := int(0.3*math.Pi*radius) + 1
+	resolution := int(math.Pi*radius) + 1
 	for {
 		p1 := path[index]
 		index += step
