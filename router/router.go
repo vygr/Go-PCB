@@ -380,6 +380,8 @@ func hoist_net(ns Nets, n int) Nets {
 
 //attempt to route board within time
 func (self *Pcb) Route(timeout float64) bool {
+	self.Remove_netlist()
+	self.Unmark_distances()
 	start_time := time.Now()
 	index := 0
 	for index < len(self.netlist) {
@@ -444,6 +446,12 @@ func (self *Pcb) Shuffle_netlist() {
 		net.Shuffle_topology()
 	}
 	self.netlist = shuffle_netlist(self.netlist)
+}
+
+func (self *Pcb) Remove_netlist() {
+	for _, net := range self.netlist {
+		net.Remove()
+	}
 }
 
 //output dimensions of board for viewer app
@@ -514,7 +522,6 @@ func (self *Net) Copy() *Net {
 	new_net.shift = 0
 	new_net.terminals = copy_terminals(self.terminals)
 	new_net.paths = optimise_paths(self.paths[:])
-	self.Remove()
 	return &new_net
 }
 
