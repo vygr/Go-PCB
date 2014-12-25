@@ -8,6 +8,10 @@ import (
 	"os"
 )
 
+/////////////////////////
+//private structure/types
+/////////////////////////
+
 type dims struct {
 	width  int
 	height int
@@ -49,7 +53,12 @@ type layer struct {
 }
 
 //layer methods
-func Newlayer(dims dims, s float32) *layer {
+
+/////////////////
+//private methods
+/////////////////
+
+func newlayer(dims dims, s float32) *layer {
 	l := layer{}
 	l.init(dims, s)
 	return &l
@@ -200,6 +209,10 @@ func (self *layer) hit_line(l line) bool {
 	return false
 }
 
+/////////////////////////
+//public structures/types
+/////////////////////////
+
 type Dims struct {
 	Width  int
 	Height int
@@ -213,6 +226,11 @@ type Layers struct {
 }
 
 //layers methods
+
+////////////////
+//public methods
+////////////////
+
 func NewLayers(dims Dims, s float32) *Layers {
 	l := Layers{}
 	l.Init(dims, s)
@@ -225,24 +243,9 @@ func (self *Layers) Init(dm Dims, s float32) *Layers {
 	self.depth = dm.Depth
 	self.layers = nil
 	for z := 0; z < self.depth; z++ {
-		self.layers = append(self.layers, Newlayer(dims{width, height}, s))
+		self.layers = append(self.layers, newlayer(dims{width, height}, s))
 	}
 	return self
-}
-
-func (self *Layers) all_layers(z1, z2 float32) <-chan *layer {
-	yield := make(chan *layer, 6)
-	go func() {
-		if z1 != z2 {
-			for z := 0; z < self.depth; z++ {
-				yield <- self.layers[z]
-			}
-		} else {
-			yield <- self.layers[int(z1)]
-		}
-		close(yield)
-	}()
-	return yield
 }
 
 func (self *Layers) Add_line(p1, p2 mymath.Point, r float32) {
@@ -276,4 +279,23 @@ func (self *Layers) Hit_line(p1, p2 mymath.Point, r float32) bool {
 		}
 	}
 	return false
+}
+
+/////////////////
+//private methods
+/////////////////
+
+func (self *Layers) all_layers(z1, z2 float32) <-chan *layer {
+	yield := make(chan *layer, 6)
+	go func() {
+		if z1 != z2 {
+			for z := 0; z < self.depth; z++ {
+				yield <- self.layers[z]
+			}
+		} else {
+			yield <- self.layers[int(z1)]
+		}
+		close(yield)
+	}()
+	return yield
 }

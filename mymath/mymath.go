@@ -9,9 +9,17 @@ import (
 	"math/rand"
 )
 
+/////////////////////////
+//public structures/types
+/////////////////////////
+
 type Point []float32
 type Points []Point
 type Pointss []Points
+
+///////////////////////////
+//private utility functions
+///////////////////////////
 
 func sum(stream <-chan float32) float32 {
 	t := float32(0.0)
@@ -77,6 +85,10 @@ func collect_point(stream <-chan float32, l int) Point {
 	}
 	return p
 }
+
+//////////////////
+//public functions
+//////////////////
 
 //generic distance metric stuff
 func Manhattan_distance(p1, p2 Point) float32 {

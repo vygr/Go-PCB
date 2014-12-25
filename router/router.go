@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+/////////////////////////
+//public structures/types
+/////////////////////////
+
 //dimensions of pcb board in grid points/layers
 type Dims struct {
 	Width  int
@@ -28,12 +32,34 @@ type Point struct {
 type Vectors []Point
 type Vectorss []Vectors
 
+//netlist structures
+type Terminal struct {
+	Radius float32
+	Term   Point
+}
+type Terminals []Terminal
+
+type Track struct {
+	Radius float32
+	Terms  Terminals
+}
+
+//////////////////////////
+//private structures/types
+//////////////////////////
+
 //sortable point
 type sort_point struct {
 	mark float32
 	node Point
 }
 type sort_points []sort_point
+
+type nets []*net
+
+///////////////////////////
+//private utility functions
+///////////////////////////
 
 //zip two vectors
 func zip_2_vectors(p1, p2 Vectors) <-chan Vectors {
@@ -151,18 +177,6 @@ func optimise_paths(paths Vectorss) Vectorss {
 		opt_paths = append(opt_paths, opt_path)
 	}
 	return opt_paths
-}
-
-//netlist structures
-type Nets []*net
-type Terminal struct {
-	Radius float32
-	Term   Point
-}
-type Terminals []Terminal
-type Track struct {
-	Radius float32
-	Terms  Terminals
 }
 
 //pcb object
@@ -294,8 +308,8 @@ func (self *Pcb) Cost() int {
 }
 
 //shuffle order of netlist
-func shuffle_netlist(ns Nets) Nets {
-	new_nets := make(Nets, 0, len(ns))
+func shuffle_netlist(ns nets) nets {
+	new_nets := make(nets, 0, len(ns))
 	for _, i := range rand.Perm(len(ns)) {
 		new_nets = append(new_nets, ns[i])
 	}
@@ -464,8 +478,8 @@ func (self *Pcb) unmark_distances() {
 }
 
 //move net to top of netlist
-func hoist_net(ns Nets, n int) Nets {
-	new_nets := make(Nets, 0, len(ns))
+func hoist_net(ns nets, n int) nets {
+	new_nets := make(nets, 0, len(ns))
 	new_nets = append(new_nets, ns[n])
 	for i := 0; i < len(ns); i++ {
 		if i != n {
