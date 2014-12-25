@@ -367,7 +367,7 @@ func (self *Pcb) Add_track(t Track) {
 }
 
 //move net to top of netlist
-func hoist_netlist(ns Nets, n int) Nets {
+func hoist_net(ns Nets, n int) Nets {
 	new_nets := make(Nets, 0, len(ns))
 	new_nets = append(new_nets, ns[n])
 	for i := 0; i < len(ns); i++ {
@@ -397,7 +397,7 @@ func (self *Pcb) Route(timeout float64) bool {
 					if self.netlist[index].Next_topology() {
 						break
 					} else {
-						self.netlist = hoist_netlist(self.netlist, index+1)
+						self.netlist = hoist_net(self.netlist, index+1)
 						for index != 0 {
 							self.netlist[index].Remove()
 							self.netlist[index].Reset_topology()
