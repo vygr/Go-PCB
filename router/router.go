@@ -98,7 +98,7 @@ func point_to_math_point(p Point) mymath.Point {
 	return mymath.Point{float32(p.X), float32(p.Y), float32(p.Z)}
 }
 
-//is point in vector
+//is point in vectors
 func vectors_contain(nodes Vectors, node Point) bool {
 	for i := 0; i < len(nodes); i++ {
 		if point_equal(nodes[i], node) {
@@ -108,7 +108,7 @@ func vectors_contain(nodes Vectors, node Point) bool {
 	return false
 }
 
-//add point to vector if not present
+//add point to vectors if not present
 func merge_point(nodes Vectors, node Point) Vectors {
 	if !vectors_contain(nodes, node) {
 		nodes = append(nodes, Point{node.X, node.Y, node.Z})
@@ -116,7 +116,7 @@ func merge_point(nodes Vectors, node Point) Vectors {
 	return nodes
 }
 
-//add all points in vector to vector if not present
+//add all points in vectors to vectors if not present
 func merge_vectors(nodes Vectors, mnodes Vectors) Vectors {
 	for i := 0; i < len(mnodes); i++ {
 		nodes = merge_point(nodes, mnodes[i])
