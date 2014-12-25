@@ -704,7 +704,7 @@ func (self *net) route() bool {
 				ends = append(ends, Point{x, y, z})
 			}
 		}
-		visited = merge_vectors(visited, starts)
+		visited = merge_vectors(visited, starts[:])
 		self.pcb.mark_distances(self.pcb.routing_flood_vectors, radius, visited, ends)
 		end_nodes := make(sort_points, 0, len(ends))
 		for _, node := range ends {
@@ -717,7 +717,7 @@ func (self *net) route() bool {
 			self.remove()
 			return false
 		}
-		visited = merge_vectors(visited, path)
+		visited = merge_vectors(visited, path[:])
 		self.paths = append(self.paths, path)
 	}
 	self.paths = optimise_paths(self.paths[:])
