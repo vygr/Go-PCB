@@ -662,6 +662,7 @@ func (self *net) backtrack_path(visited Vectors, end Point, radius float32) (Vec
 			return path, false
 		}
 		next_node := nearer_nodes[0]
+		dv2 := mymath.Norm_3d(point_to_math_point(pn))
 		if !vectors_contain(visited[:], next_node) {
 			for i := 1; i < len(nearer_nodes); i++ {
 				if vectors_contain(visited, nearer_nodes[i]) {
@@ -670,14 +671,12 @@ func (self *net) backtrack_path(visited Vectors, end Point, radius float32) (Vec
 				}
 				n := nearer_nodes[i]
 				dv1 := mymath.Norm_3d(point_to_math_point(n))
-				dv2 := mymath.Norm_3d(point_to_math_point(pn))
 				if mymath.Equal_3d(dv, mymath.Sub_3d(dv1, dv2)) {
 					next_node = nearer_nodes[i]
 				}
 			}
 		}
 		dv1 := mymath.Norm_3d(point_to_math_point(next_node))
-		dv2 := mymath.Norm_3d(point_to_math_point(pn))
 		dv = mymath.Norm_3d(mymath.Sub_3d(dv1, dv2))
 		path = append(path, next_node)
 	}
