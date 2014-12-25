@@ -167,7 +167,7 @@ func optimise_paths(paths Vectorss) Vectorss {
 		for p := range zip_2_vectors(path[:], path[1:]) {
 			p0 := point_to_math_point(p[0])
 			p1 := point_to_math_point(p[1])
-			d1 := mymath.Normalise_3d(mymath.Sub_3d(p1, p0))
+			d1 := mymath.Norm_3d(mymath.Sub_3d(p1, p0))
 			if !mymath.Equal_3d(d1, d) {
 				opt_path = append(opt_path, p[0])
 				d = d1
@@ -642,6 +642,47 @@ func (self *net) remove() {
 	self.add_terminal_collision_lines()
 }
 
+func (self *net) backtrack_path(visited Vectors, end Point, radius float32) (Vectors, bool) {
+	path := make(Vectors, 0)
+	path = append(path, end)
+	dv := mymath.Point{0, 0, 0}
+	for {
+		pn := path[len(path)-1]
+		if vectors_contain(visited[:], pn) {
+			return path, true
+		}
+		nearer_nodes := make(Vectors, 0)
+		for node := range self.pcb.all_not_shorting(
+			self.pcb.all_nearer_sorted(self.pcb.routing_path_vectors, pn, end, self.pcb.dfunc),
+			pn, radius) {
+			nearer_nodes = append(nearer_nodes, node)
+		}
+		if len(nearer_nodes) == 0 {
+			//no nearer nodes
+			return path, false
+		}
+		next_node := nearer_nodes[0]
+		if !vectors_contain(visited[:], next_node) {
+			for i := 1; i < len(nearer_nodes); i++ {
+				if vectors_contain(visited, nearer_nodes[i]) {
+					next_node = nearer_nodes[i]
+					break
+				}
+				n := nearer_nodes[i]
+				dv1 := mymath.Norm_3d(point_to_math_point(n))
+				dv2 := mymath.Norm_3d(point_to_math_point(pn))
+				if mymath.Equal_3d(dv, mymath.Sub_3d(dv1, dv2)) {
+					next_node = nearer_nodes[i]
+				}
+			}
+		}
+		dv1 := mymath.Norm_3d(point_to_math_point(next_node))
+		dv2 := mymath.Norm_3d(point_to_math_point(pn))
+		dv = mymath.Norm_3d(mymath.Sub_3d(dv1, dv2))
+		path = append(path, next_node)
+	}
+}
+
 //attempt to route this net on the current boards state
 func (self *net) route() bool {
 	self.paths = make(Vectorss, 0)
@@ -670,50 +711,14 @@ func (self *net) route() bool {
 			mark := self.pcb.get_node(node)
 			end_nodes = insert_sort_point(end_nodes, node, float32(mark), false)
 		}
-		end := end_nodes[0].node
-		path := make(Vectors, 0)
-		path = append(path, end)
-		dv := mymath.Point{0, 0, 0}
-		for {
-			pn := path[len(path)-1]
-			if vectors_contain(visited[:], pn) {
-				break
-			}
-			nearer_nodes := make(Vectors, 0)
-			for node := range self.pcb.all_not_shorting(
-				self.pcb.all_nearer_sorted(self.pcb.routing_path_vectors, pn, end, self.pcb.dfunc),
-				pn, radius) {
-				nearer_nodes = append(nearer_nodes, node)
-			}
-			if len(nearer_nodes) == 0 {
-				//no nearer nodes
-				self.pcb.unmark_distances()
-				self.remove()
-				return false
-			}
-			next_node := nearer_nodes[0]
-			if !vectors_contain(visited[:], next_node) {
-				for i := 1; i < len(nearer_nodes); i++ {
-					if vectors_contain(visited, nearer_nodes[i]) {
-						next_node = nearer_nodes[i]
-						break
-					}
-					n := nearer_nodes[i]
-					dv1 := mymath.Normalise_3d(point_to_math_point(n))
-					dv2 := mymath.Normalise_3d(point_to_math_point(pn))
-					if mymath.Equal_3d(dv, mymath.Sub_3d(dv1, dv2)) {
-						next_node = nearer_nodes[i]
-					}
-				}
-			}
-			dv1 := mymath.Normalise_3d(point_to_math_point(next_node))
-			dv2 := mymath.Normalise_3d(point_to_math_point(pn))
-			dv = mymath.Normalise_3d(mymath.Sub_3d(dv1, dv2))
-			path = append(path, next_node)
+		path, success := self.backtrack_path(visited[:], end_nodes[0].node, radius)
+		self.pcb.unmark_distances()
+		if !success{
+			self.remove()
+			return false
 		}
 		visited = merge_vectors(visited, path)
 		self.paths = append(self.paths, path)
-		self.pcb.unmark_distances()
 	}
 	self.paths = optimise_paths(self.paths[:])
 	self.add_paths_collision_lines()

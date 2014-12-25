@@ -227,7 +227,7 @@ func Distance_squared(p1, p2 Point) float32 {
 	return Dot(p, p)
 }
 
-func Normalise(p Point) Point {
+func Norm(p Point) Point {
 	l := Length(p)
 	if l == 0.0 {
 		return Scale(p, 0.0)
@@ -352,7 +352,7 @@ func Length_3d(p Point) float32 {
 	return float32(math.Sqrt(float64(Dot_3d(p, p))))
 }
 
-func Normalise_2d(p Point) Point {
+func Norm_2d(p Point) Point {
 	l := Length_2d(p)
 	if l == 0 {
 		return Point{0, 0}
@@ -361,7 +361,7 @@ func Normalise_2d(p Point) Point {
 	return Point{x / l, y / l}
 }
 
-func Normalise_3d(p Point) Point {
+func Norm_3d(p Point) Point {
 	l := Length_3d(p)
 	if l == 0 {
 		return Point{0, 0, 0}
@@ -525,7 +525,7 @@ func Thicken_path_2d(path Points, radius float32, capstyle, joinstyle int) Point
 		index += step
 		l2_v := Sub_2d(p2, p1)
 		l2_pv := Perp_2d(l2_v)
-		l2_npv := Normalise_2d(l2_pv)
+		l2_npv := Norm_2d(l2_pv)
 		rv := Scale_2d(l2_npv, radius)
 		switch {
 		case capstyle == 0:
@@ -559,9 +559,9 @@ func Thicken_path_2d(path Points, radius float32, capstyle, joinstyle int) Point
 			index += step
 			l2_v = Sub_2d(p2, p1)
 			l2_pv = Perp_2d(l2_v)
-			l2_npv = Normalise_2d(l2_pv)
-			nbv := Normalise_2d(Scale_2d(Add_2d(l1_npv, l2_npv), 0.5))
-			c := Dot_2d(nbv, Normalise_2d(l1_v))
+			l2_npv = Norm_2d(l2_pv)
+			nbv := Norm_2d(Scale_2d(Add_2d(l1_npv, l2_npv), 0.5))
+			c := Dot_2d(nbv, Norm_2d(l1_v))
 			switch {
 			case (c <= 0) || (joinstyle == 0):
 				//mitre join
