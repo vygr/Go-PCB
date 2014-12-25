@@ -168,7 +168,7 @@ func optimise_paths(paths Vectorss) Vectorss {
 			p0 := point_to_math_point(p[0])
 			p1 := point_to_math_point(p[1])
 			d1 := mymath.Normalise_3d(mymath.Sub_3d(p1, p0))
-			if !mymath.Equal(d1, d) {
+			if !mymath.Equal_3d(d1, d) {
 				opt_path = append(opt_path, p[0])
 				d = d1
 			}
