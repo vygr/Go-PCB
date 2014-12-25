@@ -1,7 +1,11 @@
 Go-PCB
 ======
 
-Go PCB router and solver
+Go PCB router and solver.
+
+There are two viewer apps, view.py requires aggDraw module to be installed, view_mpl.py
+requires matplotlib module to be installed. The matplotlib viwer is much more heavyweight
+than the former. Both are available with the Python version of this app.
 
 Example command line would be:
 
