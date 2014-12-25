@@ -130,29 +130,16 @@ func append_sort_point(nodes sort_points, node Point, mark float32) sort_points 
 	return append(nodes, mn)
 }
 
-//insert sort_point in ascending or descending order
-func insert_sort_point(nodes sort_points, node Point, mark float32, ad bool) sort_points {
-	if ad {
-		//ascending
-		for i := 0; i < len(nodes); i++ {
-			if nodes[i].mark <= mark {
-				mn := sort_point{mark, node}
-				nodes = append(nodes, mn)
-				copy(nodes[i+1:], nodes[i:])
-				nodes[i] = mn
-				return nodes
-			}
-		}
-	} else {
-		//descending
-		for i := 0; i < len(nodes); i++ {
-			if nodes[i].mark >= mark {
-				mn := sort_point{mark, node}
-				nodes = append(nodes, mn)
-				copy(nodes[i+1:], nodes[i:])
-				nodes[i] = mn
-				return nodes
-			}
+//insert sort_point in ascending order
+func insert_sort_point(nodes sort_points, node Point, mark float32) sort_points {
+	//ascending order
+	for i := 0; i < len(nodes); i++ {
+		if nodes[i].mark >= mark {
+			mn := sort_point{mark, node}
+			nodes = append(nodes, mn)
+			copy(nodes[i+1:], nodes[i:])
+			nodes[i] = mn
+			return nodes
 		}
 	}
 	return append_sort_point(nodes, node, mark)
@@ -416,7 +403,7 @@ func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal Point,
 		for mn := range self.all_marked(vectors, node) {
 			if (distance - mn.mark) > 0 {
 				mnp := point_to_math_point(mn.node)
-				nodes = insert_sort_point(nodes, mn.node, dfunc(mnp, gp), false)
+				nodes = insert_sort_point(nodes, mn.node, dfunc(mnp, gp))
 			}
 		}
 		for _, node := range nodes {
@@ -708,7 +695,7 @@ func (self *net) route() bool {
 		end_nodes := make(sort_points, 0, len(ends))
 		for _, node := range ends {
 			mark := self.pcb.get_node(node)
-			end_nodes = insert_sort_point(end_nodes, node, float32(mark), false)
+			end_nodes = insert_sort_point(end_nodes, node, float32(mark))
 		}
 		path, success := self.backtrack_path(visited[:], end_nodes[0].node, radius)
 		self.pcb.unmark_distances()
