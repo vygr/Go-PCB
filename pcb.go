@@ -215,7 +215,7 @@ func main() {
 		if eof == true {
 			break
 		}
-		pcb.Add_track(track)
+		pcb.Add_track(&track)
 	}
 
 	//run number of sample of solution and pick best one

@@ -237,7 +237,8 @@ func (self *Pcb) Copy() *Pcb {
 }
 
 //add net
-func (self *Pcb) Add_track(t Track) {
+func (self *Pcb) Add_track(trk *Track) {
+	t := *trk
 	self.netlist = append(self.netlist, newnet(t.Terms, t.Radius, *self))
 }
 
