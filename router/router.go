@@ -639,18 +639,14 @@ func (self *net) route() bool {
 	radius := self.radius + (self.pcb.track_gap * float32(self.pcb.resolution))
 	visited := map[Point]bool{}
 	for index := 1; index < len(self.terminals); index++ {
-		for _, t := range self.terminals[0:index] {
-			for z := 0; z < self.pcb.depth; z++ {
-				x, y := int(t.Term.X), int(t.Term.Y)
-				visited[Point{x, y, z}] = true
-			}
+		for z := 0; z < self.pcb.depth; z++ {
+			x, y := self.terminals[index - 1].Term.X, self.terminals[index - 1].Term.Y
+			visited[Point{x, y, z}] = true
 		}
-		ends := make(Vectors, 0, (len(self.terminals[index:index+1]) * self.pcb.depth))
-		for _, t := range self.terminals[index : index+1] {
-			for z := 0; z < self.pcb.depth; z++ {
-				x, y := t.Term.X, t.Term.Y
-				ends = append(ends, Point{x, y, z})
-			}
+		ends := make(Vectors, 0, self.pcb.depth)
+		for z := 0; z < self.pcb.depth; z++ {
+			x, y := self.terminals[index].Term.X, self.terminals[index].Term.Y
+			ends = append(ends, Point{x, y, z})
 		}
 		self.pcb.mark_distances(self.pcb.routing_flood_vectors, radius, &visited, ends)
 		end_nodes := make(sort_points, 0, len(ends))
