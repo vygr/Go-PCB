@@ -640,7 +640,7 @@ func (self *net) route() bool {
 	visited := map[Point]bool{}
 	for index := 1; index < len(self.terminals); index++ {
 		for z := 0; z < self.pcb.depth; z++ {
-			x, y := self.terminals[index - 1].Term.X, self.terminals[index - 1].Term.Y
+			x, y := self.terminals[index-1].Term.X, self.terminals[index-1].Term.Y
 			visited[Point{x, y, z}] = true
 		}
 		ends := make(Vectors, 0, self.pcb.depth)
@@ -656,11 +656,11 @@ func (self *net) route() bool {
 		}
 		path, success := self.backtrack_path(&visited, end_nodes[0].node, radius)
 		self.pcb.unmark_distances()
-		if !success{
+		if !success {
 			self.remove()
 			return false
 		}
-		for _, node := range path{
+		for _, node := range path {
 			visited[node] = true
 		}
 		self.paths = append(self.paths, path)
