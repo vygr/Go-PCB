@@ -12,7 +12,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 )
@@ -134,8 +133,6 @@ func read_track(r *bufio.Reader) (router.Track, bool) {
 
 //setup first board, loop for white..black..white..black...
 func main() {
-	runtime.GOMAXPROCS(1)
-
 	//command line flags and defaults etc
 	arg_infile := os.Stdin
 	var arg_t float64

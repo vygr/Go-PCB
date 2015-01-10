@@ -61,24 +61,6 @@ type nets []*net
 //private utility functions
 ///////////////////////////
 
-//zip two vectors
-func zip_2_vectors(p1, p2 Vectors) <-chan Vectors {
-	l1 := len(p1)
-	l2 := len(p2)
-	l := l1
-	if l2 < l1 {
-		l = l2
-	}
-	yield := make(chan Vectors, l)
-	go func() {
-		for i := 0; i < l; i++ {
-			yield <- Vectors{p1[i], p2[i]}
-		}
-		close(yield)
-	}()
-	return yield
-}
-
 //convert grid point to math point
 func point_to_math_point(pp *Point) *mymath.Point {
 	p := *pp
@@ -114,12 +96,12 @@ func optimise_paths(paths Vectorss) Vectorss {
 	for _, path := range paths {
 		opt_path := make(Vectors, 0)
 		d := &mymath.Point{0, 0, 0}
-		for p := range zip_2_vectors(path[:], path[1:]) {
-			p0 := point_to_math_point(p[0])
-			p1 := point_to_math_point(p[1])
+		for i := 0; i < (len(path) - 1); i++ {
+			p0 := point_to_math_point(path[i])
+			p1 := point_to_math_point(path[i+1])
 			d1 := mymath.Norm_3d(mymath.Sub_3d(p1, p0))
 			if !mymath.Equal_3d(d1, d) {
-				opt_path = append(opt_path, p[0])
+				opt_path = append(opt_path, path[i])
 				d = d1
 			}
 		}
@@ -556,9 +538,9 @@ func (self *net) sub_terminal_collision_lines() {
 //add paths entries to spacial cache
 func (self *net) add_paths_collision_lines() {
 	for _, path := range self.paths {
-		for p := range zip_2_vectors(path[:], path[1:]) {
-			p0 := point_to_math_point(p[0])
-			p1 := point_to_math_point(p[1])
+		for i := 0; i < (len(path) - 1); i++ {
+			p0 := point_to_math_point(path[i])
+			p1 := point_to_math_point(path[i+1])
 			self.pcb.layers.Add_line(p0, p1, self.radius)
 		}
 	}
@@ -567,9 +549,9 @@ func (self *net) add_paths_collision_lines() {
 //remove paths entries from spacial cache
 func (self *net) sub_paths_collision_lines() {
 	for _, path := range self.paths {
-		for p := range zip_2_vectors(path[:], path[1:]) {
-			p0 := point_to_math_point(p[0])
-			p1 := point_to_math_point(p[1])
+		for i := 0; i < (len(path) - 1); i++ {
+			p0 := point_to_math_point(path[i])
+			p1 := point_to_math_point(path[i+1])
 			self.pcb.layers.Sub_line(p0, p1, self.radius)
 		}
 	}
