@@ -17,22 +17,19 @@ import (
 )
 
 //generate range of routing vectors
-func gen_vectors(vec_range, x_range, y_range int) <-chan *router.Point {
-	yield := make(chan *router.Point, 16)
-	go func() {
-		for y := y_range; y >= -y_range; y-- {
-			for x := x_range; x >= -x_range; x-- {
-				p := &mymath.Point{float32(x), float32(y)}
-				if mymath.Length(p) > 0.1 && mymath.Length(p) <= float32(vec_range) {
-					yield <- &router.Point{x, y, 0}
-				}
+func gen_vectors(vec_range, x_range, y_range int) *[]*router.Point {
+	yield := make([]*router.Point, 0, 16)
+	for y := y_range; y >= -y_range; y-- {
+		for x := x_range; x >= -x_range; x-- {
+			p := &mymath.Point{float32(x), float32(y)}
+			if mymath.Length(p) > 0.1 && mymath.Length(p) <= float32(vec_range) {
+				yield = append(yield, &router.Point{x, y, 0})
 			}
 		}
-		yield <- &router.Point{0, 0, -1}
-		yield <- &router.Point{0, 0, 1}
-		close(yield)
-	}()
-	return yield
+	}
+	yield = append(yield, &router.Point{0, 0, -1})
+	yield = append(yield, &router.Point{0, 0, 1})
+	return &yield
 }
 
 //read input till given byte appears
@@ -174,29 +171,13 @@ func main() {
 	path_range_x_even_layer := flood_range_x_even_layer + 0
 	path_range_y_odd_layer := flood_range_y_odd_layer + 0
 
-	routing_flood_vectorss := make(router.Vectorss, 0)
-	routing_flood_vectors := make(router.Vectors, 0)
-	for p := range gen_vectors(flood_range, flood_range_x_even_layer, flood_range) {
-		routing_flood_vectors = append(routing_flood_vectors, p)
-	}
-	routing_flood_vectorss = append(routing_flood_vectorss, routing_flood_vectors)
-	routing_flood_vectors = make(router.Vectors, 0)
-	for p := range gen_vectors(flood_range, flood_range, flood_range_y_odd_layer) {
-		routing_flood_vectors = append(routing_flood_vectors, p)
-	}
-	routing_flood_vectorss = append(routing_flood_vectorss, routing_flood_vectors)
+	routing_flood_vectorss := router.Vectorss{
+							*gen_vectors(flood_range, flood_range_x_even_layer, flood_range),
+							*gen_vectors(flood_range, flood_range, flood_range_y_odd_layer)}
 
-	routing_path_vectorss := make(router.Vectorss, 0)
-	routing_path_vectors := make(router.Vectors, 0)
-	for p := range gen_vectors(path_range, path_range_x_even_layer, path_range) {
-		routing_path_vectors = append(routing_path_vectors, p)
-	}
-	routing_path_vectorss = append(routing_path_vectorss, routing_path_vectors)
-	routing_path_vectors = make(router.Vectors, 0)
-	for p := range gen_vectors(path_range, path_range, path_range_y_odd_layer) {
-		routing_path_vectors = append(routing_path_vectors, p)
-	}
-	routing_path_vectorss = append(routing_path_vectorss, routing_path_vectors)
+	routing_path_vectorss := router.Vectorss{
+							*gen_vectors(path_range, path_range_x_even_layer, path_range),
+							*gen_vectors(path_range, path_range, path_range_y_odd_layer)}
 
 	//choose distance metric function
 	dfuncs := []func(*mymath.Point, *mymath.Point) float32{
