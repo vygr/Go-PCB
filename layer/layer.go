@@ -256,7 +256,7 @@ func (self *Layers) Add_line(pp1, pp2 *mymath.Point, r float32) {
 	p2 := *pp2
 	lp1 := point{p1[0], p1[1]}
 	lp2 := point{p2[0], p2[1]}
-	for layer := range self.all_layers(p1[2], p2[2]) {
+	for _, layer := range *self.all_layers(p1[2], p2[2]) {
 		layer.add_line(&line{lp1, lp2, r})
 	}
 }
@@ -266,7 +266,7 @@ func (self *Layers) Sub_line(pp1, pp2 *mymath.Point, r float32) {
 	p2 := *pp2
 	lp1 := point{p1[0], p1[1]}
 	lp2 := point{p2[0], p2[1]}
-	for layer := range self.all_layers(p1[2], p2[2]) {
+	for _, layer := range *self.all_layers(p1[2], p2[2]) {
 		layer.sub_line(&line{lp1, lp2, r})
 	}
 }
@@ -276,7 +276,7 @@ func (self *Layers) Hit_line(pp1, pp2 *mymath.Point, r float32) bool {
 	p2 := *pp2
 	lp1 := point{p1[0], p1[1]}
 	lp2 := point{p2[0], p2[1]}
-	for layer := range self.all_layers(p1[2], p2[2]) {
+	for _, layer := range *self.all_layers(p1[2], p2[2]) {
 		if layer.hit_line(&line{lp1, lp2, r}) {
 			return true
 		}
@@ -288,17 +288,14 @@ func (self *Layers) Hit_line(pp1, pp2 *mymath.Point, r float32) bool {
 //private methods
 /////////////////
 
-func (self *Layers) all_layers(z1, z2 float32) <-chan *layer {
-	yield := make(chan *layer, 6)
-	go func() {
-		if z1 != z2 {
-			for z := 0; z < self.depth; z++ {
-				yield <- self.layers[z]
-			}
-		} else {
-			yield <- self.layers[int(z1)]
+func (self *Layers) all_layers(z1, z2 float32) *[]*layer {
+	if z1 != z2 {
+		yield := make([]*layer, self.depth, self.depth)
+		for z := 0; z < self.depth; z++ {
+			yield[z] = self.layers[z]
 		}
-		close(yield)
-	}()
-	return yield
+		return &yield
+	} else {
+		return &[]*layer{self.layers[int(z1)]}
+	}
 }
