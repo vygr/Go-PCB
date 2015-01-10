@@ -18,19 +18,19 @@ import (
 )
 
 //generate range of routing vectors
-func gen_vectors(vec_range, x_range, y_range int) <-chan router.Point {
-	yield := make(chan router.Point, 16)
+func gen_vectors(vec_range, x_range, y_range int) <-chan *router.Point {
+	yield := make(chan *router.Point, 16)
 	go func() {
 		for y := y_range; y >= -y_range; y-- {
 			for x := x_range; x >= -x_range; x-- {
-				p := mymath.Point{float32(x), float32(y)}
+				p := &mymath.Point{float32(x), float32(y)}
 				if mymath.Length(p) > 0.1 && mymath.Length(p) <= float32(vec_range) {
-					yield <- router.Point{x, y, 0}
+					yield <- &router.Point{x, y, 0}
 				}
 			}
 		}
-		yield <- router.Point{0, 0, -1}
-		yield <- router.Point{0, 0, 1}
+		yield <- &router.Point{0, 0, -1}
+		yield <- &router.Point{0, 0, 1}
 		close(yield)
 	}()
 	return yield
@@ -202,7 +202,7 @@ func main() {
 	routing_path_vectorss = append(routing_path_vectorss, routing_path_vectors)
 
 	//choose distance metric function
-	dfuncs := []func(mymath.Point, mymath.Point) float32{
+	dfuncs := []func(*mymath.Point, *mymath.Point) float32{
 		mymath.Manhattan_distance, mymath.Squared_euclidean_distance, mymath.Euclidean_distance,
 		mymath.Chebyshev_distance, mymath.Reciprical_distance, mymath.Random_distance}
 

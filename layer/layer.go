@@ -40,7 +40,7 @@ type aabb struct {
 	maxy int
 }
 
-type bucket []record
+type bucket []*record
 type buckets []bucket
 
 //layer object
@@ -76,7 +76,8 @@ func (self *layer) init(dims dims, s float32) {
 	return
 }
 
-func (self *layer) aabb(l line) aabb {
+func (self *layer) aabb(ln *line) *aabb {
+	l := *ln
 	x1, y1, x2, y2, r := l.p1.x, l.p1.y, l.p2.x, l.p2.y, l.radius
 	if x1 > x2 {
 		x1, x2 = x2, x1
@@ -104,41 +105,43 @@ func (self *layer) aabb(l line) aabb {
 		print("AABB Error:")
 		os.Exit(20)
 	}
-	return aabb{minx, miny, maxx, maxy}
+	return &aabb{minx, miny, maxx, maxy}
 }
 
-func (self *layer) all_buckets(bb aabb) <-chan int {
-	yield := make(chan int, 128)
-	go func() {
-		minx, miny, maxx, maxy := bb.minx, bb.miny, bb.maxx, bb.maxy
-		for y := miny; y < maxy; y++ {
-			for x := minx; x < maxx; x++ {
-				yield <- y*self.width + x
+func (self *layer) all_buckets(b *aabb) *[]int {
+	bb := *b
+	minx, miny, maxx, maxy := bb.minx, bb.miny, bb.maxx, bb.maxy
+	num_buckets := (maxx - minx) * (maxy - miny)
+	yield := make([]int, num_buckets, num_buckets)
+	i := 0
+	for y := miny; y < maxy; y++ {
+		for x := minx; x < maxx; x++ {
+			yield[i] = y*self.width + x
+			i++
+		}
+	}
+	return &yield
+}
+
+func (self *layer) all_not_empty_buckets(b *aabb) *[]int {
+	bb := *b
+	minx, miny, maxx, maxy := bb.minx, bb.miny, bb.maxx, bb.maxy
+	num_buckets := (maxx - minx) * (maxy - miny)
+	yield := make([]int, 0, num_buckets)
+	for y := miny; y < maxy; y++ {
+		for x := minx; x < maxx; x++ {
+			b := y*self.width + x
+			if len(self.buckets[b]) > 0 {
+				yield = append(yield, b)
 			}
 		}
-		close(yield)
-	}()
-	return yield
+	}
+	return &yield
 }
 
-func (self *layer) all_not_empty_buckets(bb aabb) <-chan int {
-	yield := make(chan int, 128)
-	go func() {
-		minx, miny, maxx, maxy := bb.minx, bb.miny, bb.maxx, bb.maxy
-		for y := miny; y < maxy; y++ {
-			for x := minx; x < maxx; x++ {
-				b := y*self.width + x
-				if len(self.buckets[b]) > 0 {
-					yield <- b
-				}
-			}
-		}
-		close(yield)
-	}()
-	return yield
-}
-
-func lines_equal(l1 line, l2 line) bool {
+func lines_equal(ln1, ln2 *line) bool {
+	l1 := *ln1
+	l2 := *ln2
 	if l1.p1.x != l2.p1.x {
 		return false
 	}
@@ -157,12 +160,12 @@ func lines_equal(l1 line, l2 line) bool {
 	return true
 }
 
-func (self *layer) add_line(l line) {
-	new_record := record{0, l}
-	for b := range self.all_buckets(self.aabb(l)) {
+func (self *layer) add_line(l *line) {
+	new_record := &record{0, *l}
+	for _, b := range *self.all_buckets(self.aabb(l)) {
 		found := false
 		for _, record := range self.buckets[b] {
-			if lines_equal(record.line, l) {
+			if lines_equal(&record.line, l) {
 				found = true
 				break
 			}
@@ -173,19 +176,19 @@ func (self *layer) add_line(l line) {
 	}
 }
 
-func (self *layer) sub_line(l line) {
-	for b := range self.all_not_empty_buckets(self.aabb(l)) {
+func (self *layer) sub_line(l *line) {
+	for _, b := range *self.all_not_empty_buckets(self.aabb(l)) {
 		for i := len(self.buckets[b]) - 1; i >= 0; i-- {
-			if lines_equal(self.buckets[b][i].line, l) {
+			if lines_equal(&self.buckets[b][i].line, l) {
 				self.buckets[b] = append(self.buckets[b][:i], self.buckets[b][i+1:]...)
 			}
 		}
 	}
 }
 
-func (self *layer) hit_line(l line) bool {
+func (self *layer) hit_line(l *line) bool {
 	self.test += 1
-	for b := range self.all_not_empty_buckets(self.aabb(l)) {
+	for _, b := range *self.all_not_empty_buckets(self.aabb(l)) {
 		for _, record := range self.buckets[b] {
 			if record.id != self.test {
 				record.id = self.test
@@ -198,8 +201,8 @@ func (self *layer) hit_line(l line) bool {
 					record.line.p2.x, record.line.p2.y,
 					record.line.radius
 				if mymath.Collide_thick_lines_2d(
-					mymath.Point{l1_p1_x, l1_p1_y}, mymath.Point{l1_p2_x, l1_p2_y},
-					mymath.Point{l2_p1_x, l2_p1_y}, mymath.Point{l2_p2_x, l2_p2_y},
+					&mymath.Point{l1_p1_x, l1_p1_y}, &mymath.Point{l1_p2_x, l1_p2_y},
+					&mymath.Point{l2_p1_x, l2_p1_y}, &mymath.Point{l2_p2_x, l2_p2_y},
 					l1_r, l2_r) {
 					return true
 				}
@@ -248,33 +251,33 @@ func (self *Layers) Init(dm Dims, s float32) *Layers {
 	return self
 }
 
-func (self *Layers) Add_line(p1, p2 mymath.Point, r float32) {
-	x1, y1, z1 := p1[0], p1[1], p1[2]
-	x2, y2, z2 := p2[0], p2[1], p2[2]
-	lp1 := point{x1, y1}
-	lp2 := point{x2, y2}
-	for layer := range self.all_layers(z1, z2) {
-		layer.add_line(line{lp1, lp2, r})
+func (self *Layers) Add_line(pp1, pp2 *mymath.Point, r float32) {
+	p1 := *pp1
+	p2 := *pp2
+	lp1 := point{p1[0], p1[1]}
+	lp2 := point{p2[0], p2[1]}
+	for layer := range self.all_layers(p1[2], p2[2]) {
+		layer.add_line(&line{lp1, lp2, r})
 	}
 }
 
-func (self *Layers) Sub_line(p1, p2 mymath.Point, r float32) {
-	x1, y1, z1 := p1[0], p1[1], p1[2]
-	x2, y2, z2 := p2[0], p2[1], p2[2]
-	lp1 := point{x1, y1}
-	lp2 := point{x2, y2}
-	for layer := range self.all_layers(z1, z2) {
-		layer.sub_line(line{lp1, lp2, r})
+func (self *Layers) Sub_line(pp1, pp2 *mymath.Point, r float32) {
+	p1 := *pp1
+	p2 := *pp2
+	lp1 := point{p1[0], p1[1]}
+	lp2 := point{p2[0], p2[1]}
+	for layer := range self.all_layers(p1[2], p2[2]) {
+		layer.sub_line(&line{lp1, lp2, r})
 	}
 }
 
-func (self *Layers) Hit_line(p1, p2 mymath.Point, r float32) bool {
-	x1, y1, z1 := p1[0], p1[1], p1[2]
-	x2, y2, z2 := p2[0], p2[1], p2[2]
-	lp1 := point{x1, y1}
-	lp2 := point{x2, y2}
-	for layer := range self.all_layers(z1, z2) {
-		if layer.hit_line(line{lp1, lp2, r}) {
+func (self *Layers) Hit_line(pp1, pp2 *mymath.Point, r float32) bool {
+	p1 := *pp1
+	p2 := *pp2
+	lp1 := point{p1[0], p1[1]}
+	lp2 := point{p2[0], p2[1]}
+	for layer := range self.all_layers(p1[2], p2[2]) {
+		if layer.hit_line(&line{lp1, lp2, r}) {
 			return true
 		}
 	}
