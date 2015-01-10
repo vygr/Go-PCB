@@ -291,8 +291,29 @@ func (self *Pcb) get_node(node *Point) int {
 	return self.nodes[(self.stride*n.Z)+(n.Y*self.width)+n.X]
 }
 
-//generate all grid points surrounding point
-func (self *Pcb) all_nodes(vectors *Vectorss, node *Point) *Vectors {
+//generate all grid points surrounding point, that are not value 0
+func (self *Pcb) all_marked(vectors *Vectorss, node *Point) *sort_points {
+	n := *node
+	vec := *vectors
+	x, y, z := n.X, n.Y, n.Z
+	yield := make(sort_points, 0, len(vec[z%2]))
+	for _, v := range vec[z%2] {
+		nx := x + v.X
+		ny := y + v.Y
+		nz := z + v.Z
+		if (0 <= nx) && (nx < self.width) && (0 <= ny) && (ny < self.height) && (0 <= nz) && (nz < self.depth) {
+			n := &Point{nx, ny, nz}
+			mark := self.get_node(n)
+			if mark != 0 {
+				yield = append(yield, &sort_point{float32(mark), n})
+			}
+		}
+	}
+	return &yield
+}
+
+//generate all grid points surrounding point, that are value 0
+func (self *Pcb) all_not_marked(vectors *Vectorss, node *Point) *Vectors {
 	n := *node
 	vec := *vectors
 	x, y, z := n.X, n.Y, n.Z
@@ -302,30 +323,10 @@ func (self *Pcb) all_nodes(vectors *Vectorss, node *Point) *Vectors {
 		ny := y + v.Y
 		nz := z + v.Z
 		if (0 <= nx) && (nx < self.width) && (0 <= ny) && (ny < self.height) && (0 <= nz) && (nz < self.depth) {
-			yield = append(yield, &Point{nx, ny, nz})
-		}
-	}
-	return &yield
-}
-
-//generate all grid points surrounding point, that are not value 0
-func (self *Pcb) all_marked(vectors *Vectorss, node *Point) *sort_points {
-	yield := make(sort_points, 0, 16)
-	for _, n := range *self.all_nodes(vectors, node) {
-		mark := self.get_node(n)
-		if mark != 0 {
-			yield = append(yield, &sort_point{float32(mark), n})
-		}
-	}
-	return &yield
-}
-
-//generate all grid points surrounding point, that are value 0
-func (self *Pcb) all_not_marked(vectors *Vectorss, node *Point) *Vectors {
-	yield := make(Vectors, 0, 16)
-	for _, n := range *self.all_nodes(vectors, node) {
-		if self.get_node(n) == 0 {
-			yield = append(yield, n)
+			n := &Point{nx, ny, nz}
+			if self.get_node(n) == 0 {
+				yield = append(yield, n)
+			}
 		}
 	}
 	return &yield
