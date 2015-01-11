@@ -96,12 +96,13 @@ func optimise_paths(paths Vectorss) Vectorss {
 	for _, path := range paths {
 		opt_path := make(Vectors, 0)
 		d := &mymath.Point{0, 0, 0}
-		for i := 0; i < (len(path) - 1); i++ {
-			p0 := point_to_math_point(path[i])
-			p1 := point_to_math_point(path[i+1])
+		p1 := point_to_math_point(path[0])
+		for i := 1; i < len(path); i++ {
+			p0 := p1
+			p1 = point_to_math_point(path[i])
 			d1 := mymath.Norm_3d(mymath.Sub_3d(p1, p0))
 			if !mymath.Equal_3d(d1, d) {
-				opt_path = append(opt_path, path[i])
+				opt_path = append(opt_path, path[i-1])
 				d = d1
 			}
 		}
@@ -182,8 +183,7 @@ func (self *Pcb) Copy() *Pcb {
 }
 
 //add net
-func (self *Pcb) Add_track(trk *Track) {
-	t := *trk
+func (self *Pcb) Add_track(t *Track) {
 	self.netlist = append(self.netlist, newnet(t.Terms, t.Radius, *self))
 }
 
@@ -281,21 +281,18 @@ func (self *Pcb) Print_netlist() {
 
 //set grid point to value
 func (self *Pcb) set_node(node *Point, value int) {
-	n := *node
-	self.nodes[(self.stride*n.Z)+(n.Y*self.width)+n.X] = value
+	self.nodes[(self.stride*node.Z)+(node.Y*self.width)+node.X] = value
 }
 
 //get grid point value
 func (self *Pcb) get_node(node *Point) int {
-	n := *node
-	return self.nodes[(self.stride*n.Z)+(n.Y*self.width)+n.X]
+	return self.nodes[(self.stride*node.Z)+(node.Y*self.width)+node.X]
 }
 
 //generate all grid points surrounding point, that are not value 0
 func (self *Pcb) all_marked(vectors *Vectorss, node *Point) *sort_points {
-	n := *node
 	vec := *vectors
-	x, y, z := n.X, n.Y, n.Z
+	x, y, z := node.X, node.Y, node.Z
 	yield := make(sort_points, 0, len(vec[z%2]))
 	for _, v := range vec[z%2] {
 		nx := x + v.X
@@ -314,9 +311,8 @@ func (self *Pcb) all_marked(vectors *Vectorss, node *Point) *sort_points {
 
 //generate all grid points surrounding point, that are value 0
 func (self *Pcb) all_not_marked(vectors *Vectorss, node *Point) *Vectors {
-	n := *node
 	vec := *vectors
-	x, y, z := n.X, n.Y, n.Z
+	x, y, z := node.X, node.Y, node.Z
 	yield := make(Vectors, 0, len(vec[z%2]))
 	for _, v := range vec[z%2] {
 		nx := x + v.X
@@ -338,8 +334,7 @@ func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal *Point,
 	yield := make(Vectors, 0, 16)
 	gp := point_to_math_point(goal)
 	distance := float32(self.get_node(node))
-	n := make(sort_points, 0)
-	nodes := &n
+	nodes := &sort_points{}
 	for _, mn := range *self.all_marked(vectors, node) {
 		if (distance - mn.mark) > 0 {
 			mnp := point_to_math_point(mn.node)
@@ -539,9 +534,10 @@ func (self *net) sub_terminal_collision_lines() {
 //add paths entries to spacial cache
 func (self *net) add_paths_collision_lines() {
 	for _, path := range self.paths {
-		for i := 0; i < (len(path) - 1); i++ {
-			p0 := point_to_math_point(path[i])
-			p1 := point_to_math_point(path[i+1])
+		p1 := point_to_math_point(path[0])
+		for i := 1; i < len(path); i++ {
+			p0 := p1
+			p1 = point_to_math_point(path[i])
 			self.pcb.layers.Add_line(p0, p1, self.radius)
 		}
 	}
@@ -550,9 +546,10 @@ func (self *net) add_paths_collision_lines() {
 //remove paths entries from spacial cache
 func (self *net) sub_paths_collision_lines() {
 	for _, path := range self.paths {
-		for i := 0; i < (len(path) - 1); i++ {
-			p0 := point_to_math_point(path[i])
-			p1 := point_to_math_point(path[i+1])
+		p1 := point_to_math_point(path[0])
+		for i := 1; i < len(path); i++ {
+			p0 := p1
+			p1 = point_to_math_point(path[i])
 			self.pcb.layers.Sub_line(p0, p1, self.radius)
 		}
 	}

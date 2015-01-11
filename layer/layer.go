@@ -76,8 +76,7 @@ func (self *layer) init(dims dims, s float32) {
 	return
 }
 
-func (self *layer) aabb(ln *line) *aabb {
-	l := *ln
+func (self *layer) aabb(l *line) *aabb {
 	x1, y1, x2, y2, r := l.p1.x, l.p1.y, l.p2.x, l.p2.y, l.radius
 	if x1 > x2 {
 		x1, x2 = x2, x1
@@ -108,14 +107,12 @@ func (self *layer) aabb(ln *line) *aabb {
 	return &aabb{minx, miny, maxx, maxy}
 }
 
-func (self *layer) all_buckets(b *aabb) *[]int {
-	bb := *b
-	minx, miny, maxx, maxy := bb.minx, bb.miny, bb.maxx, bb.maxy
-	num_buckets := (maxx - minx) * (maxy - miny)
+func (self *layer) all_buckets(bb *aabb) *[]int {
+	num_buckets := (bb.maxx - bb.minx) * (bb.maxy - bb.miny)
 	yield := make([]int, num_buckets, num_buckets)
 	i := 0
-	for y := miny; y < maxy; y++ {
-		for x := minx; x < maxx; x++ {
+	for y := bb.miny; y < bb.maxy; y++ {
+		for x := bb.minx; x < bb.maxx; x++ {
 			yield[i] = y*self.width + x
 			i++
 		}
@@ -123,13 +120,11 @@ func (self *layer) all_buckets(b *aabb) *[]int {
 	return &yield
 }
 
-func (self *layer) all_not_empty_buckets(b *aabb) *[]int {
-	bb := *b
-	minx, miny, maxx, maxy := bb.minx, bb.miny, bb.maxx, bb.maxy
-	num_buckets := (maxx - minx) * (maxy - miny)
+func (self *layer) all_not_empty_buckets(bb *aabb) *[]int {
+	num_buckets := (bb.maxx - bb.minx) * (bb.maxy - bb.miny)
 	yield := make([]int, 0, num_buckets)
-	for y := miny; y < maxy; y++ {
-		for x := minx; x < maxx; x++ {
+	for y := bb.miny; y < bb.maxy; y++ {
+		for x := bb.minx; x < bb.maxx; x++ {
 			b := y*self.width + x
 			if len(self.buckets[b]) > 0 {
 				yield = append(yield, b)
@@ -139,9 +134,7 @@ func (self *layer) all_not_empty_buckets(b *aabb) *[]int {
 	return &yield
 }
 
-func lines_equal(ln1, ln2 *line) bool {
-	l1 := *ln1
-	l2 := *ln2
+func lines_equal(l1, l2 *line) bool {
 	if l1.p1.x != l2.p1.x {
 		return false
 	}
@@ -188,23 +181,21 @@ func (self *layer) sub_line(l *line) {
 
 func (self *layer) hit_line(l *line) bool {
 	self.test += 1
-	for _, b := range *self.all_not_empty_buckets(self.aabb(l)) {
-		for _, record := range self.buckets[b] {
-			if record.id != self.test {
-				record.id = self.test
-				l1_p1_x, l1_p1_y, l1_p2_x, l1_p2_y, l1_r :=
-					l.p1.x, l.p1.y,
-					l.p2.x, l.p2.y,
-					l.radius
-				l2_p1_x, l2_p1_y, l2_p2_x, l2_p2_y, l2_r :=
-					record.line.p1.x, record.line.p1.y,
-					record.line.p2.x, record.line.p2.y,
-					record.line.radius
-				if mymath.Collide_thick_lines_2d(
-					&mymath.Point{l1_p1_x, l1_p1_y}, &mymath.Point{l1_p2_x, l1_p2_y},
-					&mymath.Point{l2_p1_x, l2_p1_y}, &mymath.Point{l2_p2_x, l2_p2_y},
-					l1_r, l2_r) {
-					return true
+	bb := self.aabb(l)
+	l1_p1 := &mymath.Point{l.p1.x, l.p1.y}
+	l1_p2 := &mymath.Point{l.p2.x, l.p2.y}
+	for y := bb.miny; y < bb.maxy; y++ {
+		for x := bb.minx; x < bb.maxx; x++ {
+			for _, record := range self.buckets[y*self.width + x] {
+				if record.id != self.test {
+					record.id = self.test
+					if mymath.Collide_thick_lines_2d(
+						l1_p1, l1_p2,
+						&mymath.Point{record.line.p1.x, record.line.p1.y},
+						&mymath.Point{record.line.p2.x, record.line.p2.y},
+						l.radius, record.line.radius) {
+						return true
+					}
 				}
 			}
 		}
