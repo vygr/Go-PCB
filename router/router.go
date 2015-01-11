@@ -62,8 +62,7 @@ type nets []*net
 ///////////////////////////
 
 //convert grid point to math point
-func point_to_math_point(pp *Point) *mymath.Point {
-	p := *pp
+func point_to_math_point(p *Point) *mymath.Point {
 	return &mymath.Point{float32(p.X), float32(p.Y), float32(p.Z)}
 }
 
