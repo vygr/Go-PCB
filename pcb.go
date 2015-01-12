@@ -48,7 +48,7 @@ func read_until(r *bufio.Reader, c byte) bool {
 }
 
 //read width, height, depth of pcb
-func read_dimentions(r *bufio.Reader) router.Dims {
+func read_dimentions(r *bufio.Reader) *router.Dims {
 	eof := read_until(r, '[')
 	if eof {
 		os.Exit(1)
@@ -60,11 +60,11 @@ func read_dimentions(r *bufio.Reader) router.Dims {
 	height, _ := strconv.ParseInt(strings.Trim(string, trim), 10, 32)
 	string, _ = r.ReadString(']')
 	depth, _ := strconv.ParseInt(strings.Trim(string, trim), 10, 32)
-	return router.Dims{int(width), int(height), int(depth)}
+	return &router.Dims{int(width), int(height), int(depth)}
 }
 
 //read one terminal, radius, x, y, z
-func read_terminal(r *bufio.Reader) router.Terminal {
+func read_terminal(r *bufio.Reader) *router.Terminal {
 	eof := read_until(r, '(')
 	if eof {
 		os.Exit(1)
@@ -83,11 +83,11 @@ func read_terminal(r *bufio.Reader) router.Terminal {
 	if eof {
 		os.Exit(1)
 	}
-	return router.Terminal{float32(radius), router.Point{int(x), int(y), int(z)}}
+	return &router.Terminal{float32(radius), router.Point{int(x), int(y), int(z)}}
 }
 
 //read all terminals for one track
-func read_terminals(r *bufio.Reader) router.Terminals {
+func read_terminals(r *bufio.Reader) *router.Terminals {
 	eof := read_until(r, '[')
 	if eof {
 		os.Exit(1)
@@ -104,18 +104,18 @@ func read_terminals(r *bufio.Reader) router.Terminals {
 	if eof {
 		os.Exit(1)
 	}
-	return terminals
+	return &terminals
 }
 
 //read one track
-func read_track(r *bufio.Reader) (router.Track, bool) {
+func read_track(r *bufio.Reader) (*router.Track, bool) {
 	eof := read_until(r, '[')
 	if eof {
-		return router.Track{}, true
+		return &router.Track{}, true
 	}
 	bytes, _ := r.Peek(1)
 	if bytes[0] == ']' {
-		return router.Track{}, true
+		return &router.Track{}, true
 	}
 	trim := "()[], "
 	string, _ := r.ReadString(',')
@@ -125,7 +125,7 @@ func read_track(r *bufio.Reader) (router.Track, bool) {
 	if eof {
 		os.Exit(1)
 	}
-	return router.Track{float32(radius), terminals}, false
+	return &router.Track{float32(radius), *terminals}, false
 }
 
 //setup first board, loop for white..black..white..black...
@@ -193,7 +193,7 @@ func main() {
 		if eof == true {
 			break
 		}
-		pcb.Add_track(&track)
+		pcb.Add_track(track)
 	}
 
 	//run number of sample of solution and pick best one

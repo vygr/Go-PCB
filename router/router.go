@@ -37,7 +37,7 @@ type Terminal struct {
 	Radius float32
 	Term   Point
 }
-type Terminals []Terminal
+type Terminals []*Terminal
 
 type Track struct {
 	Radius float32
@@ -66,27 +66,21 @@ func point_to_math_point(p *Point) *mymath.Point {
 	return &mymath.Point{float32(p.X), float32(p.Y), float32(p.Z)}
 }
 
-//add sort point to sort_points
-func append_sort_point(nodes *sort_points, node *Point, mark float32) *sort_points {
-	mn := sort_point{mark, node}
-	nsp := append(*nodes, &mn)
-	return &nsp
-}
-
 //insert sort_point in ascending order
 func insert_sort_point(nodes *sort_points, node *Point, mark float32) *sort_points {
 	//ascending order
 	n := *nodes
+	mn := &sort_point{mark, node}
 	for i := 0; i < len(n); i++ {
 		if n[i].mark >= mark {
-			mn := sort_point{mark, node}
-			n = append(n, &mn)
+			n = append(n, nil)
 			copy(n[i+1:], n[i:])
-			n[i] = &mn
+			n[i] = mn
 			return &n
 		}
 	}
-	return append_sort_point(nodes, node, mark)
+	n = append(n, mn)
+	return &n
 }
 
 //remove redundant points from paths
@@ -134,14 +128,14 @@ type Pcb struct {
 //public methods
 ////////////////
 
-func NewPcb(dims Dims, rfvs, rpvs *Vectorss, dfunc func(*mymath.Point, *mymath.Point) float32,
+func NewPcb(dims *Dims, rfvs, rpvs *Vectorss, dfunc func(*mymath.Point, *mymath.Point) float32,
 	res, verb int, tg float32) *Pcb {
 	p := Pcb{}
 	p.Init(dims, rfvs, rpvs, dfunc, res, verb, tg)
 	return &p
 }
 
-func (self *Pcb) Init(dims Dims, rfvs, rpvs *Vectorss,
+func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
 	dfunc func(*mymath.Point, *mymath.Point) float32, res, verb int, tg float32) {
 	self.width = dims.Width
 	self.height = dims.Height
@@ -207,8 +201,9 @@ func (self *Pcb) Route(timeout float64) bool {
 					if self.netlist[index].next_topology() {
 						break
 					} else {
-						self.netlist = hoist_net(self.netlist, index+1)
-						for index != 0 {
+						pos := 0
+						self.netlist, pos = hoist_net(self.netlist, index+1)
+						for index != pos {
 							self.netlist[index].remove()
 							self.netlist[index].reset_topology()
 							index -= 1
@@ -241,9 +236,9 @@ func (self *Pcb) Cost() int {
 
 //shuffle order of netlist
 func shuffle_netlist(ns nets) nets {
-	new_nets := make(nets, 0, len(ns))
-	for _, i := range rand.Perm(len(ns)) {
-		new_nets = append(new_nets, ns[i])
+	new_nets := make(nets, len(ns), len(ns))
+	for i, r := range rand.Perm(len(ns)) {
+		new_nets[i] = ns[r]
 	}
 	return new_nets
 }
@@ -396,15 +391,13 @@ func (self *Pcb) unmark_distances() {
 }
 
 //move net to top of netlist
-func hoist_net(ns nets, n int) nets {
-	new_nets := make(nets, 0, len(ns))
-	new_nets = append(new_nets, ns[n])
-	for i := 0; i < len(ns); i++ {
-		if i != n {
-			new_nets = append(new_nets, ns[i])
-		}
+func hoist_net(ns nets, n int) (nets, int) {
+	if n != 0 {
+		net := ns[n]
+		copy(ns[1:], ns[:n])
+		ns[0] = net
 	}
-	return new_nets
+	return ns, 0
 }
 
 func (self *Pcb) remove_netlist() {
@@ -503,9 +496,9 @@ func (self *net) reset_topology() {
 
 //randomize order of terminals
 func shuffle_terminals(terms Terminals) Terminals {
-	new_terms := make(Terminals, 0, len(terms))
-	for _, i := range rand.Perm(len(terms)) {
-		new_terms = append(new_terms, terms[i])
+	new_terms := make(Terminals, len(terms), len(terms))
+	for i, r := range rand.Perm(len(terms)) {
+		new_terms[i] = terms[r]
 	}
 	return new_terms
 }
