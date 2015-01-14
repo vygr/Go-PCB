@@ -358,28 +358,28 @@ func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius float32) 
 func (self *Pcb) mark_distances(vectors *Vectorss, radius float32, starts *map[Point]bool, ends *Vectors) {
 	distance := 1
 	nodes := *starts
-	for node, _ := range nodes {
-		self.set_node(&node, distance)
-	}
 	for len(nodes) > 0 {
-		distance++
+		for node, _ := range nodes {
+			self.set_node(&node, distance)
+		}
+		flag := true
+		for _, node := range *ends {
+			if self.get_node(node) == 0 {
+				flag = false
+				break
+			}
+		}
+		if flag {
+			break
+		}
 		new_nodes := map[Point]bool{}
 		for node, _ := range nodes {
 			for _, new_node := range *self.all_not_shorting(self.all_not_marked(vectors, &node), &node, radius) {
-				self.set_node(new_node, distance)
 				new_nodes[*new_node] = true
 			}
 		}
 		nodes = new_nodes
-		flag := false
-		for _, node := range *ends {
-			if self.get_node(node) == 0 {
-				flag = true
-			}
-		}
-		if !flag {
-			break
-		}
+		distance++
 	}
 }
 
