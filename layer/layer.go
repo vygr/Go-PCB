@@ -5,7 +5,6 @@ package layer
 import (
 	"../mymath"
 	"math"
-	"os"
 )
 
 /////////////////////////
@@ -68,9 +67,9 @@ func (self *layer) init(dims dims, s float32) {
 	self.width = dims.width
 	self.height = dims.height
 	self.scale = s
-	self.buckets = nil
+	self.buckets = make(buckets, (self.width * self.height), (self.width * self.height))
 	for i := 0; i < (self.width * self.height); i++ {
-		self.buckets = append(self.buckets, bucket{})
+		self.buckets[i] = bucket{}
 	}
 	self.test = 0
 	return
@@ -99,10 +98,6 @@ func (self *layer) aabb(l *line) *aabb {
 	}
 	if maxy > self.height {
 		maxy = self.height
-	}
-	if minx > maxx || miny > maxy {
-		print("AABB Error:")
-		os.Exit(20)
 	}
 	return &aabb{minx, miny, maxx, maxy}
 }
@@ -186,7 +181,7 @@ func (self *layer) hit_line(l *line) bool {
 	l1_p2 := &mymath.Point{l.p2.x, l.p2.y}
 	for y := bb.miny; y < bb.maxy; y++ {
 		for x := bb.minx; x < bb.maxx; x++ {
-			for _, record := range self.buckets[y*self.width + x] {
+			for _, record := range self.buckets[y*self.width+x] {
 				if record.id != self.test {
 					record.id = self.test
 					if mymath.Collide_thick_lines_2d(
@@ -235,9 +230,9 @@ func (self *Layers) Init(dm Dims, s float32) *Layers {
 	width := dm.Width
 	height := dm.Height
 	self.depth = dm.Depth
-	self.layers = nil
+	self.layers = make([]*layer, self.depth, self.depth)
 	for z := 0; z < self.depth; z++ {
-		self.layers = append(self.layers, newlayer(dims{width, height}, s))
+		self.layers[z] = newlayer(dims{width, height}, s)
 	}
 	return self
 }

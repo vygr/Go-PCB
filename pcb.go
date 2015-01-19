@@ -137,6 +137,7 @@ func main() {
 	var arg_s int
 	var arg_g float64
 	var arg_r int
+	var arg_q int
 	var arg_d int
 	var arg_fr int
 	var arg_xr int
@@ -147,6 +148,7 @@ func main() {
 	flag.Float64Var(&arg_g, "g", 0.1, "track gap, default 0.1")
 	flag.IntVar(&arg_r, "r", 1, "grid resolution 1..4, default 1")
 	flag.IntVar(&arg_d, "d", 0, "distance metric 0..5, default 0.\n\t0 -> manhattan\n\t1 -> squared_euclidean\n\t2 -> euclidean\n\t3 -> chebyshev\n\t4 -> reciprocal\n\t5 -> random")
+	flag.IntVar(&arg_q, "q", 1, "area quantization, default 1")
 	flag.IntVar(&arg_fr, "fr", 2, "flood range 1..5, default 2")
 	flag.IntVar(&arg_xr, "xr", 1, "even layer x range 0..5, default 1")
 	flag.IntVar(&arg_yr, "yr", 1, "odd layer y range 0..5, default 1")
@@ -187,7 +189,7 @@ func main() {
 	//create pcb object and populate with tracks from input
 	dimensions := read_dimentions(reader)
 	pcb := router.NewPcb(dimensions, &routing_flood_vectorss, &routing_path_vectorss,
-		dfuncs[arg_d], arg_r, arg_v, float32(arg_g))
+		dfuncs[arg_d], arg_r, arg_v, arg_q, float32(arg_g))
 	for {
 		track, eof := read_track(reader)
 		if eof == true {
@@ -203,7 +205,7 @@ func main() {
 	best_pcb = nil
 	for i := 0; i < arg_s; i++ {
 		if !pcb.Route(arg_t) {
-			pcb.Shuffle_netlist()
+			pcb.Increase_quantization()
 			continue
 		}
 		cost := pcb.Cost()
@@ -211,7 +213,6 @@ func main() {
 			best_cost = cost
 			best_pcb = pcb.Copy()
 		}
-		pcb.Shuffle_netlist()
 	}
 	if best_pcb != nil {
 		best_pcb.Print_netlist()

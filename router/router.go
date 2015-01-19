@@ -9,6 +9,7 @@ import (
 	"../mymath"
 	"fmt"
 	"math/rand"
+	"sort"
 	"time"
 )
 
@@ -56,6 +57,35 @@ type sort_point struct {
 type sort_points []*sort_point
 
 type nets []*net
+
+type aabb struct {
+	minx int
+	miny int
+	maxx int
+	maxy int
+}
+
+//for sorting nets
+type by_group nets
+
+func (s by_group) Len() int {
+	return len(s)
+}
+func (s by_group) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s by_group) Less(i, j int) bool {
+	if s[i].area == s[j].area {
+		if s[i].bbox.minx == s[j].bbox.minx {
+			if s[i].bbox.miny == s[j].bbox.miny {
+				return s[i].radius > s[j].radius
+			}
+			return s[i].bbox.miny < s[j].bbox.miny
+		}
+		return s[i].bbox.minx < s[j].bbox.minx
+	}
+	return s[i].area < s[j].area
+}
 
 ///////////////////////////
 //private utility functions
@@ -116,6 +146,7 @@ type Pcb struct {
 	dfunc                 func(*mymath.Point, *mymath.Point) float32
 	resolution            int
 	verbosity             int
+	quantization          int
 	track_gap             float32
 	layers                *layer.Layers
 	netlist               nets
@@ -129,14 +160,14 @@ type Pcb struct {
 ////////////////
 
 func NewPcb(dims *Dims, rfvs, rpvs *Vectorss, dfunc func(*mymath.Point, *mymath.Point) float32,
-	res, verb int, tg float32) *Pcb {
+	res, verb, quant int, tg float32) *Pcb {
 	p := Pcb{}
-	p.Init(dims, rfvs, rpvs, dfunc, res, verb, tg)
+	p.Init(dims, rfvs, rpvs, dfunc, res, verb, quant, tg)
 	return &p
 }
 
 func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
-	dfunc func(*mymath.Point, *mymath.Point) float32, res, verb int, tg float32) {
+	dfunc func(*mymath.Point, *mymath.Point) float32, res, verb, quant int, tg float32) {
 	self.width = dims.Width
 	self.height = dims.Height
 	self.depth = dims.Depth
@@ -145,6 +176,7 @@ func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
 	self.dfunc = dfunc
 	self.resolution = res
 	self.verbosity = verb
+	self.quantization = quant
 	self.track_gap = tg
 	self.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(res))
 	self.netlist = nil
@@ -165,6 +197,7 @@ func (self *Pcb) Copy() *Pcb {
 	new_pcb.dfunc = self.dfunc
 	new_pcb.resolution = self.resolution
 	new_pcb.verbosity = self.verbosity
+	new_pcb.quantization = self.quantization
 	new_pcb.track_gap = self.track_gap
 	new_pcb.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(self.resolution))
 	new_pcb.netlist = nil
@@ -184,8 +217,12 @@ func (self *Pcb) Add_track(t *Track) {
 func (self *Pcb) Route(timeout float64) bool {
 	self.remove_netlist()
 	self.unmark_distances()
-	start_time := time.Now()
+	self.reset_areas()
+	self.shuffle_netlist()
+	sort.Sort(by_group(self.netlist))
+	hoisted_nets := map[*net]bool{}
 	index := 0
+	start_time := time.Now()
 	for index < len(self.netlist) {
 		if self.netlist[index].route() {
 			index += 1
@@ -193,7 +230,10 @@ func (self *Pcb) Route(timeout float64) bool {
 			for {
 				self.netlist[index].reset_topology()
 				if index == 0 {
-					self.Shuffle_netlist()
+					self.reset_areas()
+					self.shuffle_netlist()
+					sort.Sort(by_group(self.netlist))
+					hoisted_nets = map[*net]bool{}
 					break
 				} else {
 					index -= 1
@@ -203,7 +243,16 @@ func (self *Pcb) Route(timeout float64) bool {
 					} else {
 						pos := 0
 						self.netlist, pos = hoist_net(self.netlist, index+1)
-						for index != pos {
+						if hoisted_nets[self.netlist[pos]] {
+							if pos != 0 {
+								self.netlist[pos].area = self.netlist[pos-1].area
+								self.netlist, pos = hoist_net(self.netlist, pos)
+							}
+							delete(hoisted_nets, self.netlist[pos])
+						} else {
+							hoisted_nets[self.netlist[pos]] = true
+						}
+						for index > pos {
 							self.netlist[index].remove()
 							self.netlist[index].reset_topology()
 							index -= 1
@@ -234,21 +283,9 @@ func (self *Pcb) Cost() int {
 	return sum
 }
 
-//shuffle order of netlist
-func shuffle_netlist(ns nets) nets {
-	new_nets := make(nets, len(ns), len(ns))
-	for i, r := range rand.Perm(len(ns)) {
-		new_nets[i] = ns[r]
-	}
-	return new_nets
-}
-
-func (self *Pcb) Shuffle_netlist() {
-	for _, net := range self.netlist {
-		net.remove()
-		net.shuffle_topology()
-	}
-	self.netlist = shuffle_netlist(self.netlist)
+//increase area quantization
+func (self *Pcb) Increase_quantization() {
+	self.quantization++
 }
 
 //output dimensions of board for viewer app
@@ -390,14 +427,42 @@ func (self *Pcb) unmark_distances() {
 	}
 }
 
-//move net to top of netlist
-func hoist_net(ns nets, n int) (nets, int) {
-	if n != 0 {
-		net := ns[n]
-		copy(ns[1:], ns[:n])
-		ns[0] = net
+//reset areas
+func (self *Pcb) reset_areas() {
+	for _, net := range self.netlist {
+		net.area, net.bbox = aabb_terminals(net.terminals, self.quantization)
 	}
-	return ns, 0
+}
+
+//shuffle order of netlist
+func (self *Pcb) shuffle_netlist() {
+	for _, net := range self.netlist {
+		net.shuffle_topology()
+	}
+	new_nets := make(nets, len(self.netlist), len(self.netlist))
+	for i, r := range rand.Perm(len(self.netlist)) {
+		new_nets[i] = self.netlist[r]
+	}
+	self.netlist = new_nets
+}
+
+//move net to top of area group
+func hoist_net(ns nets, n int) (nets, int) {
+	i := 0
+	if n != 0 {
+		for i = n; i >= 0; i-- {
+			if ns[i].area < ns[n].area {
+				break
+			}
+		}
+		i++
+		if n != i {
+			net := ns[n]
+			copy(ns[i+1:], ns[i:n])
+			ns[i] = net
+		}
+	}
+	return ns, i
 }
 
 func (self *Pcb) remove_netlist() {
@@ -411,6 +476,8 @@ type net struct {
 	pcb       Pcb
 	terminals Terminals
 	radius    float32
+	area      int
+	bbox      aabb
 	shift     int
 	paths     Vectorss
 }
@@ -438,10 +505,39 @@ func scale_terminals(terms Terminals, res int) Terminals {
 	return terms
 }
 
+//aabb of terminals
+func aabb_terminals(terms Terminals, quantization int) (int, aabb) {
+	minx := (terms[0].Term.X / quantization) * quantization
+	miny := (terms[0].Term.Y / quantization) * quantization
+	maxx := ((terms[0].Term.X + (quantization - 1)) / quantization) * quantization
+	maxy := ((terms[0].Term.Y + (quantization - 1)) / quantization) * quantization
+	for i := 1; i < len(terms); i++ {
+		tminx := (terms[i].Term.X / quantization) * quantization
+		tminy := (terms[i].Term.Y / quantization) * quantization
+		tmaxx := ((terms[i].Term.X + (quantization - 1)) / quantization) * quantization
+		tmaxy := ((terms[i].Term.Y + (quantization - 1)) / quantization) * quantization
+		if tminx < minx {
+			minx = tminx
+		}
+		if tminy < miny {
+			miny = tminy
+		}
+		if tmaxx > maxx {
+			maxx = tmaxx
+		}
+		if tmaxy > maxy {
+			maxy = tmaxy
+		}
+	}
+	rec := aabb{minx, miny, maxx, maxy}
+	return (maxx - minx) * (maxy - miny), rec
+}
+
 func (self *net) init(terms Terminals, radius float32, pcb Pcb) {
 	self.pcb = pcb
 	self.radius = radius * float32(pcb.resolution)
 	self.shift = 0
+	self.area, self.bbox = aabb_terminals(terms, pcb.quantization)
 	self.paths = make(Vectorss, 0)
 	self.terminals = scale_terminals(terms, pcb.resolution)
 	self.remove()
@@ -459,6 +555,7 @@ func (self *net) copy() *net {
 	new_net.pcb = self.pcb
 	new_net.radius = self.radius
 	new_net.shift = 0
+	new_net.area = self.area
 	new_net.terminals = copy_terminals(self.terminals)
 	new_net.paths = optimise_paths(self.paths[:])
 	return &new_net
