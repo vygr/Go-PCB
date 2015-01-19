@@ -278,13 +278,43 @@ func main() {
 		}
 	}
 
+	minx := float32(1000000)
+	miny := float32(1000000)
+	maxx := float32(-1000000)
+	maxy := float32(-1000000)
+	all_tpoints := []router.Tpoint{}
+	for _, instance := range instance_map {
+		component := component_map[*instance.comp]
+		for _, pin := range component.pin_map {
+			x := pin.x
+			y := pin.y
+			if *instance.side != "front" {
+				x = -x
+			}
+			angle := instance.angle * (math.Pi / 180.0)
+			s := math.Sin(angle)
+			c := math.Cos(angle)
+			px := float32(((c*x - s*y) + instance.x) / 1000.0)
+			py := float32(((s*x + c*y) + instance.y) / 1000.0)
+			all_tpoints = append(all_tpoints, router.Tpoint{px, py, 0.0})
+			if px < minx {
+				minx = px
+			}
+			if px > maxx {
+				maxx = px
+			}
+			if py < miny {
+				miny = py
+			}
+			if py > maxy {
+				maxy = py
+			}
+		}
+	}
+
 	ss = "network"
 	network_node := search_tree(tree, &ss)
 	tracks := make([]router.Track, 0)
-	minx := 1000000
-	miny := 1000000
-	maxx := -1000000
-	maxy := -1000000
 	for _, node := range network_node.branches {
 		if *node.value == "net" {
 			terminals := router.Terminals{}
@@ -303,56 +333,29 @@ func main() {
 				angle := instance.angle * (math.Pi / 180.0)
 				s := math.Sin(angle)
 				c := math.Cos(angle)
-				px := int(((c*x - s*y) + instance.x) / 1000.0)
-				py := int(((s*x + c*y) + instance.y) / 1000.0)
-				terminals = append(terminals, &router.Terminal{0.5, router.Point{px, py, 0}})
-				if px < minx {
-					minx = px
-				}
-				if px > maxx {
-					maxx = px
-				}
-				if py < miny {
-					miny = py
-				}
-				if py > maxy {
-					maxy = py
+				px := float32(((c*x - s*y) + instance.x) / 1000.0)
+				py := float32(((s*x + c*y) + instance.y) / 1000.0)
+				term := router.Tpoint{px, py, 0.0}
+				terminals = append(terminals, &router.Terminal{0.5, term})
+
+				for i, t := range all_tpoints {
+					if t == term {
+						all_tpoints = append(all_tpoints[:i], all_tpoints[i+1:]...)
+						break
+					}
 				}
 			}
 			tracks = append(tracks, router.Track{0.25, terminals})
 		}
 	}
+	terminals := router.Terminals{}
+	for _, term := range all_tpoints {
+		terminals = append(terminals, &router.Terminal{0.5, term})
+	}
+	tracks = append(tracks, router.Track{0.0, terminals})
 
-	/*
-		for _, component := range component_map {
-			fmt.Println("---------------------")
-			fmt.Println(*component.name)
-			fmt.Println("---------------------")
-			for _, pin := range component.pin_map {
-				fmt.Println("Form:", *pin.form)
-				fmt.Println("Angle:", pin.angle)
-				fmt.Println("Name:", *pin.name)
-				fmt.Println("X:", pin.x)
-				fmt.Println("Y:", pin.y)
-			}
-			fmt.Println("---------------------")
-		}
-
-		for _, instance := range instance_map {
-			fmt.Println("---------------------")
-			fmt.Println(*instance.name)
-			fmt.Println("---------------------")
-			fmt.Println("Comp:", *instance.comp)
-			fmt.Println("X:", instance.x)
-			fmt.Println("Y:", instance.y)
-			fmt.Println("Side:", *instance.side)
-			fmt.Println("Angle:", instance.angle)
-			fmt.Println("---------------------")
-		}
-	*/
-
-	border := 2
-	fmt.Print("[", maxx-minx+(border*2), ",", maxy-miny+(border*2), ",", num_layers, "]\n")
+	border := float32(2)
+	fmt.Print("[", int(maxx-minx+(border*2)+1), ",", int(maxy-miny+(border*2)+1), ",", num_layers, "]\n")
 	for _, track := range tracks {
 		fmt.Print("[")
 		fmt.Print(track.Radius, ",")
