@@ -1,0 +1,375 @@
+///opt/local/bin/go run
+// Copyright (C) 2014 Chris Hinsley.
+
+//package name
+package main
+
+//package imports
+import (
+	"./router"
+	"bufio"
+	"flag"
+	"fmt"
+	"math"
+	"os"
+	"strconv"
+	"strings"
+)
+
+type tree struct {
+	value    *string
+	branches []*tree
+}
+
+type pin struct {
+	form  *string
+	angle float64
+	name  *string
+	x     float64
+	y     float64
+}
+
+type component struct {
+	name    *string
+	pin_map map[string]*pin
+}
+
+type instance struct {
+	name  *string
+	comp  *string
+	x     float64
+	y     float64
+	side  *string
+	angle float64
+}
+
+func peek_char(r *bufio.Reader) (byte, bool) {
+	bytes, err := r.Peek(1)
+	if err != nil {
+		//eof
+		return ' ', true
+	}
+	return bytes[0], false
+}
+
+func read_char(r *bufio.Reader) (byte, bool) {
+	b, err := r.ReadByte()
+	if err != nil {
+		//eof
+		return ' ', true
+	}
+	return b, false
+}
+
+func read_whitespace(r *bufio.Reader) {
+	for {
+		b, eof := peek_char(r)
+		if eof {
+			return
+		}
+		if b != ' ' && b != '\t' && b != '\r' && b != '\n' {
+			return
+		}
+		read_char(r)
+	}
+}
+
+func peek_until(r *bufio.Reader, c byte) {
+	for {
+		b, eof := peek_char(r)
+		if eof {
+			return
+		}
+		if b == c {
+			return
+		}
+		read_char(r)
+	}
+}
+
+func read_until(r *bufio.Reader, c byte) {
+	for {
+		b, eof := read_char(r)
+		if eof {
+			return
+		}
+		if b == c {
+			return
+		}
+	}
+}
+
+func read_node_name(r *bufio.Reader) *string {
+	s := ""
+	for {
+		b, eof := peek_char(r)
+		if eof || b == '\t' || b == '\n' || b == '\r' || b == ' ' || b == ')' {
+			break
+		}
+		s += string(b)
+		read_char(r)
+	}
+	return &s
+}
+
+func read_string(r *bufio.Reader) *tree {
+	t := tree{nil, nil}
+	s := ""
+	for {
+		b, eof := peek_char(r)
+		if eof || b == '\t' || b == '\n' || b == '\r' || b == ' ' || b == ')' {
+			break
+		}
+		s += string(b)
+		read_char(r)
+	}
+	t.value = &s
+	return &t
+}
+
+func read_quoted_string(r *bufio.Reader) *tree {
+	t := tree{nil, nil}
+	s := ""
+	for {
+		b, eof := peek_char(r)
+		if eof || b == '"' {
+			break
+		}
+		s += string(b)
+		read_char(r)
+	}
+	t.value = &s
+	return &t
+}
+
+func read_tree(r *bufio.Reader) *tree {
+	read_until(r, '(')
+	read_whitespace(r)
+	t := tree{read_node_name(r), nil}
+	for {
+		read_whitespace(r)
+		b, eof := peek_char(r)
+		if eof {
+			break
+		}
+		if b == ')' {
+			read_char(r)
+			break
+		}
+		if b == '(' {
+			t.branches = append(t.branches, read_tree(r))
+			continue
+		}
+		if b == '"' {
+			read_char(r)
+			t.branches = append(t.branches, read_quoted_string(r))
+			read_char(r)
+			continue
+		}
+		t.branches = append(t.branches, read_string(r))
+	}
+	return &t
+}
+
+func search_tree(t *tree, s *string) *tree {
+	if t.value != nil {
+		if *t.value == *s {
+			return t
+		}
+	}
+	for _, ct := range t.branches {
+		st := search_tree(ct, s)
+		if st != nil {
+			return st
+		}
+	}
+	return nil
+}
+
+func print_tree(t *tree, indent int) {
+	if t.value != nil {
+		for i := 0; i < indent; i++ {
+			fmt.Print("  ")
+		}
+		fmt.Print(*t.value, "\n")
+	}
+	for _, ct := range t.branches {
+		print_tree(ct, indent+1)
+	}
+}
+
+func main() {
+	//command line flags and defaults etc
+	arg_infile := os.Stdin
+	var arg_t float64
+	var arg_v int
+	flag.Float64Var(&arg_t, "t", 600.0, "timeout in seconds, default 600")
+	flag.IntVar(&arg_v, "v", 0, "verbosity level 0..1, default 0")
+	flag.Parse()
+
+	//input reader from default stdin or given file
+	if flag.NArg() > 0 {
+		//read access
+		file, err := os.Open(flag.Args()[0])
+		if err != nil {
+			os.Exit(1)
+		}
+		arg_infile = file
+	}
+	reader := bufio.NewReader(arg_infile)
+
+	//create tree from input
+	tree := read_tree(reader)
+
+	ss := "structure"
+	structure_node := search_tree(tree, &ss)
+	num_layers := 0
+	for _, layer_node := range structure_node.branches {
+		if *layer_node.value == "layer" {
+			num_layers++
+		}
+	}
+
+	ss = "library"
+	library_node := search_tree(tree, &ss)
+	component_map := map[string]*component{}
+	for _, image_node := range library_node.branches {
+		if *image_node.value == "image" {
+			component_name := image_node.branches[0].value
+			component := component{component_name, map[string]*pin{}}
+			for _, pin_node := range image_node.branches[1:] {
+				if *pin_node.value == "pin" {
+					pin := pin{}
+					pin.form = pin_node.branches[0].value
+					if *pin_node.branches[1].value == "rotate" {
+						pin.angle, _ = strconv.ParseFloat(*pin_node.branches[1].branches[0].value, 32)
+						pin.name = pin_node.branches[2].value
+						pin.x, _ = strconv.ParseFloat(*pin_node.branches[3].value, 32)
+						pin.y, _ = strconv.ParseFloat(*pin_node.branches[4].value, 32)
+					} else {
+						pin.angle = 0.0
+						pin.name = pin_node.branches[1].value
+						pin.x, _ = strconv.ParseFloat(*pin_node.branches[2].value, 32)
+						pin.y, _ = strconv.ParseFloat(*pin_node.branches[3].value, 32)
+					}
+					component.pin_map[*pin.name] = &pin
+				}
+			}
+			component_map[*component_name] = &component
+		}
+	}
+
+	ss = "placement"
+	placement_tree := search_tree(tree, &ss)
+	instance_map := map[string]*instance{}
+	for _, node := range placement_tree.branches {
+		component_name := node.branches[0].value
+		for i := 1; i < len(node.branches); i++ {
+			place_tree := *node.branches[i]
+			instance := instance{}
+			instance_name := place_tree.branches[0].value
+			instance.name = instance_name
+			instance.comp = component_name
+			instance.x, _ = strconv.ParseFloat(*place_tree.branches[1].value, 32)
+			instance.y, _ = strconv.ParseFloat(*place_tree.branches[2].value, 32)
+			instance.side = place_tree.branches[3].value
+			instance.angle, _ = strconv.ParseFloat(*place_tree.branches[4].value, 32)
+			instance_map[*instance_name] = &instance
+		}
+	}
+
+	ss = "network"
+	network_node := search_tree(tree, &ss)
+	tracks := make([]router.Track, 0)
+	minx := 1000000
+	miny := 1000000
+	maxx := -1000000
+	maxy := -1000000
+	for _, node := range network_node.branches {
+		if *node.value == "net" {
+			terminals := router.Terminals{}
+			for _, pin := range node.branches[1].branches {
+				pin_info := strings.Split(*pin.value, "-")
+				instance_name := pin_info[0]
+				pin_name := pin_info[1]
+				instance := instance_map[instance_name]
+				component := component_map[*instance.comp]
+				pin := component.pin_map[pin_name]
+				x := pin.x
+				y := pin.y
+				if *instance.side != "front" {
+					x = -x
+				}
+				angle := instance.angle * (math.Pi / 180.0)
+				s := math.Sin(angle)
+				c := math.Cos(angle)
+				px := int(((c*x - s*y) + instance.x) / 1000.0)
+				py := int(((s*x + c*y) + instance.y) / 1000.0)
+				terminals = append(terminals, &router.Terminal{0.5, router.Point{px, py, 0}})
+				if px < minx {
+					minx = px
+				}
+				if px > maxx {
+					maxx = px
+				}
+				if py < miny {
+					miny = py
+				}
+				if py > maxy {
+					maxy = py
+				}
+			}
+			tracks = append(tracks, router.Track{0.25, terminals})
+		}
+	}
+
+	/*
+		for _, component := range component_map {
+			fmt.Println("---------------------")
+			fmt.Println(*component.name)
+			fmt.Println("---------------------")
+			for _, pin := range component.pin_map {
+				fmt.Println("Form:", *pin.form)
+				fmt.Println("Angle:", pin.angle)
+				fmt.Println("Name:", *pin.name)
+				fmt.Println("X:", pin.x)
+				fmt.Println("Y:", pin.y)
+			}
+			fmt.Println("---------------------")
+		}
+
+		for _, instance := range instance_map {
+			fmt.Println("---------------------")
+			fmt.Println(*instance.name)
+			fmt.Println("---------------------")
+			fmt.Println("Comp:", *instance.comp)
+			fmt.Println("X:", instance.x)
+			fmt.Println("Y:", instance.y)
+			fmt.Println("Side:", *instance.side)
+			fmt.Println("Angle:", instance.angle)
+			fmt.Println("---------------------")
+		}
+	*/
+
+	border := 2
+	fmt.Print("[", maxx-minx+(border*2), ",", maxy-miny+(border*2), ",", num_layers, "]\n")
+	for _, track := range tracks {
+		fmt.Print("[")
+		fmt.Print(track.Radius, ",")
+		fmt.Print("[")
+		for i, t := range track.Terms {
+			r, x, y, z := t.Radius, t.Term.X, t.Term.Y, t.Term.Z
+			fmt.Print("(")
+			fmt.Print(r, ",")
+			fmt.Print("(")
+			fmt.Print(x-minx+border, ",")
+			fmt.Print(y-miny+border, ",")
+			fmt.Print(z)
+			fmt.Print("))")
+			if i != (len(track.Terms) - 1) {
+				fmt.Print(",")
+			}
+		}
+		fmt.Println("]]")
+	}
+}
