@@ -34,9 +34,14 @@ type Vectors []*Point
 type Vectorss []Vectors
 
 //netlist structures
+type Tpoint struct {
+	X float32
+	Y float32
+	Z float32
+}
 type Terminal struct {
 	Radius float32
-	Term   Point
+	Term   Tpoint
 }
 type Terminals []*Terminal
 
@@ -176,7 +181,7 @@ func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
 	self.dfunc = dfunc
 	self.resolution = res
 	self.verbosity = verb
-	self.quantization = quant
+	self.quantization = quant * res
 	self.track_gap = tg
 	self.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(res))
 	self.netlist = nil
@@ -498,24 +503,24 @@ func newnet(terms Terminals, radius float32, pcb Pcb) *net {
 func scale_terminals(terms Terminals, res int) Terminals {
 	for i := 0; i < len(terms); i++ {
 		terms[i].Radius *= float32(res)
-		terms[i].Term.X *= res
-		terms[i].Term.Y *= res
-		terms[i].Term.Z *= res
+		terms[i].Term.X *= float32(res)
+		terms[i].Term.Y *= float32(res)
+		terms[i].Term.Z *= float32(res)
 	}
 	return terms
 }
 
 //aabb of terminals
 func aabb_terminals(terms Terminals, quantization int) (int, aabb) {
-	minx := (terms[0].Term.X / quantization) * quantization
-	miny := (terms[0].Term.Y / quantization) * quantization
-	maxx := ((terms[0].Term.X + (quantization - 1)) / quantization) * quantization
-	maxy := ((terms[0].Term.Y + (quantization - 1)) / quantization) * quantization
+	minx := (int(terms[0].Term.X) / quantization) * quantization
+	miny := (int(terms[0].Term.Y) / quantization) * quantization
+	maxx := ((int(terms[0].Term.X) + (quantization - 1)) / quantization) * quantization
+	maxy := ((int(terms[0].Term.Y) + (quantization - 1)) / quantization) * quantization
 	for i := 1; i < len(terms); i++ {
-		tminx := (terms[i].Term.X / quantization) * quantization
-		tminy := (terms[i].Term.Y / quantization) * quantization
-		tmaxx := ((terms[i].Term.X + (quantization - 1)) / quantization) * quantization
-		tmaxy := ((terms[i].Term.Y + (quantization - 1)) / quantization) * quantization
+		tminx := (int(terms[i].Term.X) / quantization) * quantization
+		tminy := (int(terms[i].Term.Y) / quantization) * quantization
+		tmaxx := ((int(terms[i].Term.X) + (quantization - 1)) / quantization) * quantization
+		tmaxy := ((int(terms[i].Term.Y) + (quantization - 1)) / quantization) * quantization
 		if tminx < minx {
 			minx = tminx
 		}
@@ -537,9 +542,9 @@ func (self *net) init(terms Terminals, radius float32, pcb Pcb) {
 	self.pcb = pcb
 	self.radius = radius * float32(pcb.resolution)
 	self.shift = 0
-	self.area, self.bbox = aabb_terminals(terms, pcb.quantization)
 	self.paths = make(Vectorss, 0)
 	self.terminals = scale_terminals(terms, pcb.resolution)
+	self.area, self.bbox = aabb_terminals(terms, pcb.quantization)
 	self.remove()
 }
 
@@ -696,18 +701,22 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius float32)
 
 //attempt to route this net on the current boards state
 func (self *net) route() bool {
+	if self.radius == 0.0{
+		//unused terminals track !
+		return true
+	}
 	self.paths = make(Vectorss, 0)
 	self.sub_terminal_collision_lines()
 	radius := self.radius + (self.pcb.track_gap * float32(self.pcb.resolution))
 	visited := map[Point]bool{}
 	for index := 1; index < len(self.terminals); index++ {
 		for z := 0; z < self.pcb.depth; z++ {
-			x, y := self.terminals[index-1].Term.X, self.terminals[index-1].Term.Y
+			x, y := int(self.terminals[index-1].Term.X+0.5), int(self.terminals[index-1].Term.Y+0.5)
 			visited[Point{x, y, z}] = true
 		}
 		ends := make(Vectors, self.pcb.depth, self.pcb.depth)
 		for z := 0; z < self.pcb.depth; z++ {
-			x, y := self.terminals[index].Term.X, self.terminals[index].Term.Y
+			x, y := int(self.terminals[index].Term.X+0.5), int(self.terminals[index].Term.Y+0.5)
 			ends[z] = &Point{x, y, z}
 		}
 		self.pcb.mark_distances(self.pcb.routing_flood_vectors, radius, &visited, &ends)
