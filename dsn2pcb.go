@@ -201,10 +201,8 @@ func print_tree(t *tree, indent int) {
 func main() {
 	//command line flags and defaults etc
 	arg_infile := os.Stdin
-	var arg_t float64
-	var arg_v int
-	flag.Float64Var(&arg_t, "t", 600.0, "timeout in seconds, default 600")
-	flag.IntVar(&arg_v, "v", 0, "verbosity level 0..1, default 0")
+	var arg_b int
+	flag.IntVar(&arg_b, "b", 0, "border gap, default 0")
 	flag.Parse()
 
 	//input reader from default stdin or given file
@@ -354,8 +352,8 @@ func main() {
 	}
 	tracks = append(tracks, router.Track{0.0, terminals})
 
-	border := float32(2)
-	fmt.Print("[", int(maxx-minx+(border*2)+1), ",", int(maxy-miny+(border*2)+1), ",", num_layers, "]\n")
+	border := float32(arg_b)
+	fmt.Print("[", int(maxx-minx+(border*2)+0.5)+1, ",", int(maxy-miny+(border*2)+0.5)+1, ",", num_layers, "]\n")
 	for _, track := range tracks {
 		fmt.Print("[")
 		fmt.Print(track.Radius, ",")
