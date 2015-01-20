@@ -81,25 +81,14 @@ func (s by_group) Swap(i, j int) {
 }
 func (s by_group) Less(i, j int) bool {
 	if s[i].area == s[j].area {
-		if s[i].bbox.minx == s[j].bbox.minx {
-			if s[i].bbox.miny == s[j].bbox.miny {
-				return s[i].radius > s[j].radius
-			}
-			return s[i].bbox.miny < s[j].bbox.miny
-		}
-		return s[i].bbox.minx < s[j].bbox.minx
+		return s[i].radius > s[j].radius
 	}
-	return s[i].area < s[j].area
+	return s[i].area > s[j].area
 }
 
 ///////////////////////////
 //private utility functions
 ///////////////////////////
-
-//convert grid point to math point
-func point_to_math_point(p *Point) *mymath.Point {
-	return &mymath.Point{float32(p.X), float32(p.Y), float32(p.Z)}
-}
 
 //insert sort_point in ascending order
 func insert_sort_point(nodes *sort_points, node *Point, mark float32) *sort_points {
@@ -118,28 +107,6 @@ func insert_sort_point(nodes *sort_points, node *Point, mark float32) *sort_poin
 	return &n
 }
 
-//remove redundant points from paths
-func optimise_paths(paths Vectorss) Vectorss {
-	opt_paths := make(Vectorss, 0)
-	for _, path := range paths {
-		opt_path := make(Vectors, 0)
-		d := &mymath.Point{0, 0, 0}
-		p1 := point_to_math_point(path[0])
-		for i := 1; i < len(path); i++ {
-			p0 := p1
-			p1 = point_to_math_point(path[i])
-			d1 := mymath.Norm_3d(mymath.Sub_3d(p1, p0))
-			if !mymath.Equal_3d(d1, d) {
-				opt_path = append(opt_path, path[i-1])
-				d = d1
-			}
-		}
-		opt_path = append(opt_path, path[len(path)-1])
-		opt_paths = append(opt_paths, opt_path)
-	}
-	return opt_paths
-}
-
 //pcb object
 type Pcb struct {
 	width                 int
@@ -156,6 +123,7 @@ type Pcb struct {
 	layers                *layer.Layers
 	netlist               nets
 	nodes                 []int
+	deform                map[Point]*mymath.Point
 }
 
 //pcb methods
@@ -189,6 +157,7 @@ func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
 	self.height *= res
 	self.stride = self.width * self.height
 	self.nodes = make([]int, self.stride*self.depth, self.stride*self.depth)
+	self.deform = map[Point]*mymath.Point{}
 }
 
 func (self *Pcb) Copy() *Pcb {
@@ -210,6 +179,7 @@ func (self *Pcb) Copy() *Pcb {
 		new_pcb.netlist = append(new_pcb.netlist, net.copy())
 	}
 	new_pcb.nodes = make([]int, self.stride*self.depth, self.stride*self.depth)
+	new_pcb.deform = self.deform
 	return &new_pcb
 }
 
@@ -315,6 +285,15 @@ func (self *Pcb) Print_netlist() {
 //private methods
 /////////////////
 
+//convert grid point to space point
+func (self *Pcb) grid_to_space_point(p *Point) *mymath.Point {
+	sp := self.deform[*p]
+	if sp != nil {
+		return sp
+	}
+	return &mymath.Point{float32(p.X), float32(p.Y), float32(p.Z)}
+}
+
 //set grid point to value
 func (self *Pcb) set_node(node *Point, value int) {
 	self.nodes[(self.stride*node.Z)+(node.Y*self.width)+node.X] = value
@@ -368,12 +347,12 @@ func (self *Pcb) all_not_marked(vectors *Vectorss, node *Point) *Vectors {
 func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal *Point,
 	dfunc func(*mymath.Point, *mymath.Point) float32) *Vectors {
 	yield := make(Vectors, 0, 16)
-	gp := point_to_math_point(goal)
+	gp := self.grid_to_space_point(goal)
 	distance := float32(self.get_node(node))
 	nodes := &sort_points{}
 	for _, mn := range *self.all_marked(vectors, node) {
 		if (distance - mn.mark) > 0 {
-			mnp := point_to_math_point(mn.node)
+			mnp := self.grid_to_space_point(mn.node)
 			nodes = insert_sort_point(nodes, mn.node, dfunc(mnp, gp))
 		}
 	}
@@ -386,9 +365,9 @@ func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal *Point,
 //generate all grid points surrounding point that are not shorting with an existing track
 func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius float32) *Vectors {
 	yield := make(Vectors, 0, 16)
-	np := point_to_math_point(node)
+	np := self.grid_to_space_point(node)
 	for _, new_node := range *gather {
-		nnp := point_to_math_point(new_node)
+		nnp := self.grid_to_space_point(new_node)
 		if !self.layers.Hit_line(np, nnp, radius) {
 			yield = append(yield, new_node)
 		}
@@ -456,7 +435,7 @@ func hoist_net(ns nets, n int) (nets, int) {
 	i := 0
 	if n != 0 {
 		for i = n; i >= 0; i-- {
-			if ns[i].area < ns[n].area {
+			if ns[i].area > ns[n].area {
 				break
 			}
 		}
@@ -546,6 +525,13 @@ func (self *net) init(terms Terminals, radius float32, pcb Pcb) {
 	self.terminals = scale_terminals(terms, pcb.resolution)
 	self.area, self.bbox = aabb_terminals(terms, pcb.quantization)
 	self.remove()
+	for _, term := range self.terminals {
+		for z := 0; z < pcb.depth; z++ {
+			p := Point{int(term.Term.X + 0.5), int(term.Term.Y + 0.5), z}
+			sp := mymath.Point{term.Term.X, term.Term.Y, float32(z)}
+			pcb.deform[p] = &sp
+		}
+	}
 }
 
 //copy terminals
@@ -562,7 +548,7 @@ func (self *net) copy() *net {
 	new_net.shift = 0
 	new_net.area = self.area
 	new_net.terminals = copy_terminals(self.terminals)
-	new_net.paths = optimise_paths(self.paths[:])
+	new_net.paths = self.optimise_paths(self.paths[:])
 	return &new_net
 }
 
@@ -612,7 +598,7 @@ func (self *net) shuffle_topology() {
 //add terminal entries to spacial cache
 func (self *net) add_terminal_collision_lines() {
 	for _, node := range self.terminals {
-		r, x, y := node.Radius, float32(node.Term.X), float32(node.Term.Y)
+		r, x, y := node.Radius, node.Term.X, node.Term.Y
 		self.pcb.layers.Add_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r)
 	}
 }
@@ -620,7 +606,7 @@ func (self *net) add_terminal_collision_lines() {
 //remove terminal entries from spacial cache
 func (self *net) sub_terminal_collision_lines() {
 	for _, node := range self.terminals {
-		r, x, y := node.Radius, float32(node.Term.X), float32(node.Term.Y)
+		r, x, y := node.Radius, node.Term.X, node.Term.Y
 		self.pcb.layers.Sub_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r)
 	}
 }
@@ -628,10 +614,10 @@ func (self *net) sub_terminal_collision_lines() {
 //add paths entries to spacial cache
 func (self *net) add_paths_collision_lines() {
 	for _, path := range self.paths {
-		p1 := point_to_math_point(path[0])
+		p1 := self.pcb.grid_to_space_point(path[0])
 		for i := 1; i < len(path); i++ {
 			p0 := p1
-			p1 = point_to_math_point(path[i])
+			p1 = self.pcb.grid_to_space_point(path[i])
 			self.pcb.layers.Add_line(p0, p1, self.radius)
 		}
 	}
@@ -640,10 +626,10 @@ func (self *net) add_paths_collision_lines() {
 //remove paths entries from spacial cache
 func (self *net) sub_paths_collision_lines() {
 	for _, path := range self.paths {
-		p1 := point_to_math_point(path[0])
+		p1 := self.pcb.grid_to_space_point(path[0])
 		for i := 1; i < len(path); i++ {
 			p0 := p1
-			p1 = point_to_math_point(path[i])
+			p1 = self.pcb.grid_to_space_point(path[i])
 			self.pcb.layers.Sub_line(p0, p1, self.radius)
 		}
 	}
@@ -657,6 +643,29 @@ func (self *net) remove() {
 	self.add_terminal_collision_lines()
 }
 
+//remove redundant points from paths
+func (self *net) optimise_paths(paths Vectorss) Vectorss {
+	opt_paths := make(Vectorss, 0)
+	for _, path := range paths {
+		opt_path := make(Vectors, 0)
+		d := &mymath.Point{0, 0, 0}
+		p1 := self.pcb.grid_to_space_point(path[0])
+		for i := 1; i < len(path); i++ {
+			p0 := p1
+			p1 = self.pcb.grid_to_space_point(path[i])
+			d1 := mymath.Norm_3d(mymath.Sub_3d(p1, p0))
+			if !mymath.Equal_3d(d1, d) {
+				opt_path = append(opt_path, path[i-1])
+				d = d1
+			}
+		}
+		opt_path = append(opt_path, path[len(path)-1])
+		opt_paths = append(opt_paths, opt_path)
+	}
+	return opt_paths
+}
+
+//backtrack path from ends to starts
 func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius float32) (Vectors, bool) {
 	visited := *vis
 	path := make(Vectors, 0)
@@ -679,7 +688,7 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius float32)
 			return path, false
 		}
 		next_node := nearer_nodes[0]
-		dv2 := mymath.Norm_3d(point_to_math_point(path_node))
+		dv2 := mymath.Norm_3d(self.pcb.grid_to_space_point(path_node))
 		if !visited[*next_node] {
 			for i := 1; i < len(nearer_nodes); i++ {
 				node := nearer_nodes[i]
@@ -687,13 +696,13 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius float32)
 					next_node = node
 					break
 				}
-				dv1 := mymath.Norm_3d(point_to_math_point(node))
+				dv1 := mymath.Norm_3d(self.pcb.grid_to_space_point(node))
 				if mymath.Equal_3d(dv, mymath.Sub_3d(dv1, dv2)) {
 					next_node = node
 				}
 			}
 		}
-		dv1 := mymath.Norm_3d(point_to_math_point(next_node))
+		dv1 := mymath.Norm_3d(self.pcb.grid_to_space_point(next_node))
 		dv = mymath.Norm_3d(mymath.Sub_3d(dv1, dv2))
 		path = append(path, next_node)
 	}
@@ -701,7 +710,7 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius float32)
 
 //attempt to route this net on the current boards state
 func (self *net) route() bool {
-	if self.radius == 0.0{
+	if self.radius == 0.0 {
 		//unused terminals track !
 		return true
 	}
@@ -738,7 +747,7 @@ func (self *net) route() bool {
 		}
 		self.paths = append(self.paths, path)
 	}
-	self.paths = optimise_paths(self.paths[:])
+	self.paths = self.optimise_paths(self.paths[:])
 	self.add_paths_collision_lines()
 	self.add_terminal_collision_lines()
 	return true
@@ -767,11 +776,12 @@ func (self *net) print_net() {
 	for i, path := range self.paths {
 		fmt.Print("[")
 		for j, p := range path {
-			x, y, z := float32(p.X), float32(p.Y), float32(p.Z)
+			psp := self.pcb.grid_to_space_point(p)
+			sp := *psp
 			fmt.Print("(")
-			fmt.Print(x*scale, ",")
-			fmt.Print(y*scale, ",")
-			fmt.Print(z)
+			fmt.Print(sp[0]*scale, ",")
+			fmt.Print(sp[1]*scale, ",")
+			fmt.Print(sp[2])
 			fmt.Print(")")
 			if j != (len(path) - 1) {
 				fmt.Print(",")
