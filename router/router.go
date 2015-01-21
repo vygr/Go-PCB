@@ -48,6 +48,7 @@ type Terminals []*Terminal
 type Track struct {
 	Radius float32
 	Gap    float32
+	Via    float32
 	Terms  Terminals
 }
 
@@ -183,7 +184,7 @@ func (self *Pcb) Copy() *Pcb {
 
 //add net
 func (self *Pcb) Add_track(t *Track) {
-	self.netlist = append(self.netlist, newnet(t.Terms, t.Radius, t.Gap, *self))
+	self.netlist = append(self.netlist, newnet(t.Terms, t.Radius, t.Gap, t.Via, *self))
 }
 
 //attempt to route board within time
@@ -350,20 +351,28 @@ func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal *Point,
 }
 
 //generate all grid points surrounding point that are not shorting with an existing track
-func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius, gap float32) *Vectors {
+func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius, gap, via float32) *Vectors {
 	yield := make(Vectors, 0, 16)
 	np := self.grid_to_space_point(node)
 	for _, new_node := range *gather {
 		nnp := self.grid_to_space_point(new_node)
-		if !self.layers.Hit_line(np, nnp, radius, gap) {
-			yield = append(yield, new_node)
+		if node.Z != new_node.Z {
+			//this is a via direction
+			if !self.layers.Hit_line(np, nnp, via, gap) {
+				yield = append(yield, new_node)
+			}
+		} else {
+			//not a via direction
+			if !self.layers.Hit_line(np, nnp, radius, gap) {
+				yield = append(yield, new_node)
+			}
 		}
 	}
 	return &yield
 }
 
 //flood fill distances from starts till ends covered
-func (self *Pcb) mark_distances(vectors *Vectorss, radius, gap float32, starts *map[Point]bool, ends *Vectors) {
+func (self *Pcb) mark_distances(vectors *Vectorss, radius, gap, via float32, starts *map[Point]bool, ends *Vectors) {
 	distance := 1
 	nodes := *starts
 	for len(nodes) > 0 {
@@ -382,7 +391,7 @@ func (self *Pcb) mark_distances(vectors *Vectorss, radius, gap float32, starts *
 		}
 		new_nodes := map[Point]bool{}
 		for node, _ := range nodes {
-			for _, new_node := range *self.all_not_shorting(self.all_not_marked(vectors, &node), &node, radius, gap) {
+			for _, new_node := range *self.all_not_shorting(self.all_not_marked(vectors, &node), &node, radius, gap, via) {
 				new_nodes[*new_node] = true
 			}
 		}
@@ -448,6 +457,7 @@ type net struct {
 	terminals Terminals
 	radius    float32
 	gap       float32
+	via       float32
 	area      int
 	bbox      aabb
 	shift     int
@@ -460,9 +470,9 @@ type net struct {
 //private methods
 /////////////////
 
-func newnet(terms Terminals, radius, gap float32, pcb Pcb) *net {
+func newnet(terms Terminals, radius, gap, via float32, pcb Pcb) *net {
 	n := net{}
-	n.init(terms, radius, gap, pcb)
+	n.init(terms, radius, gap, via, pcb)
 	return &n
 }
 
@@ -505,10 +515,11 @@ func aabb_terminals(terms Terminals, quantization int) (int, aabb) {
 	return (maxx - minx) * (maxy - miny), rec
 }
 
-func (self *net) init(terms Terminals, radius, gap float32, pcb Pcb) {
+func (self *net) init(terms Terminals, radius, gap, via float32, pcb Pcb) {
 	self.pcb = pcb
 	self.radius = radius * float32(pcb.resolution)
 	self.gap = gap * float32(pcb.resolution)
+	self.via = via * float32(pcb.resolution)
 	self.shift = 0
 	self.paths = make(Vectorss, 0)
 	self.terminals = scale_terminals(terms, pcb.resolution)
@@ -535,6 +546,7 @@ func (self *net) copy() *net {
 	new_net.pcb = self.pcb
 	new_net.radius = self.radius
 	new_net.gap = self.gap
+	new_net.via = self.via
 	new_net.shift = 0
 	new_net.area = self.area
 	new_net.terminals = copy_terminals(self.terminals)
@@ -608,7 +620,13 @@ func (self *net) add_paths_collision_lines() {
 		for i := 1; i < len(path); i++ {
 			p0 := p1
 			p1 = self.pcb.grid_to_space_point(path[i])
-			self.pcb.layers.Add_line(p0, p1, self.radius, self.gap)
+			if path[i-1].Z != path[i].Z {
+				//via direction
+				self.pcb.layers.Add_line(p0, p1, self.via, self.gap)
+			} else {
+				//not via direction
+				self.pcb.layers.Add_line(p0, p1, self.radius, self.gap)
+			}
 		}
 	}
 }
@@ -620,7 +638,13 @@ func (self *net) sub_paths_collision_lines() {
 		for i := 1; i < len(path); i++ {
 			p0 := p1
 			p1 = self.pcb.grid_to_space_point(path[i])
-			self.pcb.layers.Sub_line(p0, p1, self.radius, self.gap)
+			if path[i-1].Z != path[i].Z {
+				//via direction
+				self.pcb.layers.Sub_line(p0, p1, self.via, self.gap)
+			} else {
+				//not via direction
+				self.pcb.layers.Sub_line(p0, p1, self.radius, self.gap)
+			}
 		}
 	}
 }
@@ -656,7 +680,7 @@ func (self *net) optimise_paths(paths Vectorss) Vectorss {
 }
 
 //backtrack path from ends to starts
-func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, gap float32) (Vectors, bool) {
+func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, gap, via float32) (Vectors, bool) {
 	visited := *vis
 	path := Vectors{end}
 	for {
@@ -668,7 +692,7 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, gap flo
 		nearer_nodes := make(Vectors, 0)
 		for _, node := range *self.pcb.all_not_shorting(
 			self.pcb.all_nearer_sorted(self.pcb.routing_path_vectors, path_node, end, self.pcb.dfunc),
-			path_node, radius, gap) {
+			path_node, radius, gap, via) {
 			nearer_nodes = append(nearer_nodes, node)
 		}
 		if len(nearer_nodes) == 0 {
@@ -698,7 +722,7 @@ func (self *net) route() bool {
 			x, y := int(self.terminals[index].Term.X+0.5), int(self.terminals[index].Term.Y+0.5)
 			ends[z] = &Point{x, y, z}
 		}
-		self.pcb.mark_distances(self.pcb.routing_flood_vectors, self.radius, self.gap, &visited, &ends)
+		self.pcb.mark_distances(self.pcb.routing_flood_vectors, self.radius, self.gap, self.via, &visited, &ends)
 		e := make(sort_points, 0, len(ends))
 		end_nodes := &e
 		for _, node := range ends {
@@ -706,7 +730,7 @@ func (self *net) route() bool {
 			end_nodes = insert_sort_point(end_nodes, node, float32(mark))
 		}
 		e = *end_nodes
-		path, success := self.backtrack_path(&visited, e[0].node, self.radius, self.gap)
+		path, success := self.backtrack_path(&visited, e[0].node, self.radius, self.gap, self.via)
 		self.pcb.unmark_distances()
 		if !success {
 			self.remove()
@@ -728,6 +752,7 @@ func (self *net) print_net() {
 	scale := 1.0 / float32(self.pcb.resolution)
 	fmt.Print("[")
 	fmt.Print(self.radius*scale, ",")
+	fmt.Print(self.via*scale, ",")
 	fmt.Print("[")
 	for i, t := range self.terminals {
 		r, x, y, z := t.Radius, float32(t.Term.X), float32(t.Term.Y), float32(t.Term.Z)

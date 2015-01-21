@@ -374,14 +374,14 @@ func main() {
 				}
 			}
 			rule := rule_map[*node.branches[0].value]
-			tracks = append(tracks, router.Track{float32(rule.radius) / 1000.0, float32(rule.gap) / 1000.0, terminals})
+			tracks = append(tracks, router.Track{float32(rule.radius) / 1000.0, float32(rule.gap) / 1000.0, 0.25, terminals})
 		}
 	}
 	terminals := router.Terminals{}
 	for _, term := range all_tpoints {
 		terminals = append(terminals, &router.Terminal{0.5, term})
 	}
-	tracks = append(tracks, router.Track{0.0, 0.0, terminals})
+	tracks = append(tracks, router.Track{0.0, 0.0, 0.0, terminals})
 
 	border := float32(arg_b)
 	fmt.Print("[", int(maxx-minx+(border*2)+0.5)+1, ",", int(maxy-miny+(border*2)+0.5)+1, ",", num_layers, "]\n")
@@ -389,6 +389,7 @@ func main() {
 		fmt.Print("[")
 		fmt.Print(track.Radius, ",")
 		fmt.Print(track.Gap, ",")
+		fmt.Print(track.Via, ",")
 		fmt.Print("[")
 		for i, t := range track.Terms {
 			r, x, y, z := t.Radius, t.Term.X, t.Term.Y, t.Term.Z
