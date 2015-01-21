@@ -25,6 +25,7 @@ type line struct {
 	p1     point
 	p2     point
 	radius float32
+	gap    float32
 }
 
 type record struct {
@@ -76,13 +77,14 @@ func (self *layer) init(dims dims, s float32) {
 }
 
 func (self *layer) aabb(l *line) *aabb {
-	x1, y1, x2, y2, r := l.p1.x, l.p1.y, l.p2.x, l.p2.y, l.radius
+	x1, y1, x2, y2, r, g := l.p1.x, l.p1.y, l.p2.x, l.p2.y, l.radius, l.gap
 	if x1 > x2 {
 		x1, x2 = x2, x1
 	}
 	if y1 > y2 {
 		y1, y2 = y2, y1
 	}
+	r += g
 	minx := int(math.Floor(float64((x1 - r) * self.scale)))
 	miny := int(math.Floor(float64((y1 - r) * self.scale)))
 	maxx := int(math.Ceil(float64((x2 + r) * self.scale)))
@@ -145,6 +147,9 @@ func lines_equal(l1, l2 *line) bool {
 	if l1.radius != l2.radius {
 		return false
 	}
+	if l1.gap != l2.gap {
+		return false
+	}
 	return true
 }
 
@@ -184,11 +189,17 @@ func (self *layer) hit_line(l *line) bool {
 			for _, record := range self.buckets[y*self.width+x] {
 				if record.id != self.test {
 					record.id = self.test
+					r := l.radius
+					if l.gap >= record.line.gap {
+						r += l.gap
+					} else {
+						r += record.line.gap
+					}
 					if mymath.Collide_thick_lines_2d(
 						l1_p1, l1_p2,
 						&mymath.Point{record.line.p1.x, record.line.p1.y},
 						&mymath.Point{record.line.p2.x, record.line.p2.y},
-						l.radius, record.line.radius) {
+						r, record.line.radius) {
 						return true
 					}
 				}
@@ -237,33 +248,33 @@ func (self *Layers) Init(dm Dims, s float32) *Layers {
 	return self
 }
 
-func (self *Layers) Add_line(pp1, pp2 *mymath.Point, r float32) {
+func (self *Layers) Add_line(pp1, pp2 *mymath.Point, r, g float32) {
 	p1 := *pp1
 	p2 := *pp2
 	lp1 := point{p1[0], p1[1]}
 	lp2 := point{p2[0], p2[1]}
 	for _, layer := range *self.all_layers(p1[2], p2[2]) {
-		layer.add_line(&line{lp1, lp2, r})
+		layer.add_line(&line{lp1, lp2, r, g})
 	}
 }
 
-func (self *Layers) Sub_line(pp1, pp2 *mymath.Point, r float32) {
+func (self *Layers) Sub_line(pp1, pp2 *mymath.Point, r, g float32) {
 	p1 := *pp1
 	p2 := *pp2
 	lp1 := point{p1[0], p1[1]}
 	lp2 := point{p2[0], p2[1]}
 	for _, layer := range *self.all_layers(p1[2], p2[2]) {
-		layer.sub_line(&line{lp1, lp2, r})
+		layer.sub_line(&line{lp1, lp2, r, g})
 	}
 }
 
-func (self *Layers) Hit_line(pp1, pp2 *mymath.Point, r float32) bool {
+func (self *Layers) Hit_line(pp1, pp2 *mymath.Point, r, g float32) bool {
 	p1 := *pp1
 	p2 := *pp2
 	lp1 := point{p1[0], p1[1]}
 	lp2 := point{p2[0], p2[1]}
 	for _, layer := range *self.all_layers(p1[2], p2[2]) {
-		if layer.hit_line(&line{lp1, lp2, r}) {
+		if layer.hit_line(&line{lp1, lp2, r, g}) {
 			return true
 		}
 	}

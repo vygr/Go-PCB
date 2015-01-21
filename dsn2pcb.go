@@ -320,7 +320,7 @@ func main() {
 	rule_map := map[string]*rule{}
 	for _, node := range network_node.branches {
 		if *node.value == "class" {
-			rule := rule{100, 100}
+			rule := rule{125, 125}
 			for _, rule_node := range node.branches {
 				if *rule_node.value == "rule" {
 					for _, dims := range rule_node.branches {
@@ -330,12 +330,11 @@ func main() {
 						}
 						if *dims.value == "clearance" {
 							rule.gap, _ = strconv.ParseFloat(*dims.branches[0].value, 32)
-							rule.gap /= 4.0
+							rule.gap /= 2.0
 						}
 					}
 				}
 			}
-			rule.gap += rule.radius
 			for _, netname := range node.branches {
 				if netname.branches == nil {
 					rule_map[*netname.value] = &rule
