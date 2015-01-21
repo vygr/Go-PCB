@@ -43,6 +43,11 @@ type instance struct {
 	angle float64
 }
 
+type rule struct {
+	radius float64
+	gap    float64
+}
+
 func peek_char(r *bufio.Reader) (byte, bool) {
 	bytes, err := r.Peek(1)
 	if err != nil {
@@ -312,6 +317,32 @@ func main() {
 
 	ss = "network"
 	network_node := search_tree(tree, &ss)
+	rule_map := map[string]*rule{}
+	for _, node := range network_node.branches {
+		if *node.value == "class" {
+			rule := rule{100, 100}
+			for _, rule_node := range node.branches {
+				if *rule_node.value == "rule" {
+					for _, dims := range rule_node.branches {
+						if *dims.value == "width" {
+							rule.radius, _ = strconv.ParseFloat(*dims.branches[0].value, 32)
+							rule.radius /= 2.0
+						}
+						if *dims.value == "clearance" {
+							rule.gap, _ = strconv.ParseFloat(*dims.branches[0].value, 32)
+							rule.gap /= 4.0
+						}
+					}
+				}
+			}
+			rule.gap += rule.radius
+			for _, netname := range node.branches {
+				if netname.branches == nil {
+					rule_map[*netname.value] = &rule
+				}
+			}
+		}
+	}
 	tracks := make([]router.Track, 0)
 	for _, node := range network_node.branches {
 		if *node.value == "net" {
@@ -343,20 +374,22 @@ func main() {
 					}
 				}
 			}
-			tracks = append(tracks, router.Track{0.25, terminals})
+			rule := rule_map[*node.branches[0].value]
+			tracks = append(tracks, router.Track{float32(rule.radius) / 1000.0, float32(rule.gap) / 1000.0, terminals})
 		}
 	}
 	terminals := router.Terminals{}
 	for _, term := range all_tpoints {
 		terminals = append(terminals, &router.Terminal{0.5, term})
 	}
-	tracks = append(tracks, router.Track{0.0, terminals})
+	tracks = append(tracks, router.Track{0.0, 0.0, terminals})
 
 	border := float32(arg_b)
 	fmt.Print("[", int(maxx-minx+(border*2)+0.5)+1, ",", int(maxy-miny+(border*2)+0.5)+1, ",", num_layers, "]\n")
 	for _, track := range tracks {
 		fmt.Print("[")
 		fmt.Print(track.Radius, ",")
+		fmt.Print(track.Gap, ",")
 		fmt.Print("[")
 		for i, t := range track.Terms {
 			r, x, y, z := t.Radius, t.Term.X, t.Term.Y, t.Term.Z
