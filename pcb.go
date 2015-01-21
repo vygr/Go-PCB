@@ -120,12 +120,14 @@ func read_track(r *bufio.Reader) (*router.Track, bool) {
 	trim := "()[], "
 	string, _ := r.ReadString(',')
 	radius, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
+	string, _ = r.ReadString(',')
+	gap, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
 	terminals := read_terminals(r)
 	eof = read_until(r, ']')
 	if eof {
 		os.Exit(1)
 	}
-	return &router.Track{float32(radius), *terminals}, false
+	return &router.Track{float32(radius), float32(gap), *terminals}, false
 }
 
 //setup first board, loop for white..black..white..black...
@@ -135,7 +137,6 @@ func main() {
 	var arg_t float64
 	var arg_v int
 	var arg_s int
-	var arg_g float64
 	var arg_r int
 	var arg_q int
 	var arg_d int
@@ -145,7 +146,6 @@ func main() {
 	flag.Float64Var(&arg_t, "t", 600.0, "timeout in seconds, default 600")
 	flag.IntVar(&arg_v, "v", 0, "verbosity level 0..1, default 0")
 	flag.IntVar(&arg_s, "s", 1, "number of samples, default 1")
-	flag.Float64Var(&arg_g, "g", 0.1, "track gap, default 0.1")
 	flag.IntVar(&arg_r, "r", 1, "grid resolution 1..4, default 1")
 	flag.IntVar(&arg_d, "d", 0, "distance metric 0..5, default 0.\n\t0 -> manhattan\n\t1 -> squared_euclidean\n\t2 -> euclidean\n\t3 -> chebyshev\n\t4 -> reciprocal\n\t5 -> random")
 	flag.IntVar(&arg_q, "q", 1, "area quantization, default 1")
@@ -189,7 +189,7 @@ func main() {
 	//create pcb object and populate with tracks from input
 	dimensions := read_dimentions(reader)
 	pcb := router.NewPcb(dimensions, &routing_flood_vectorss, &routing_path_vectorss,
-		dfuncs[arg_d], arg_r, arg_v, arg_q, float32(arg_g))
+		dfuncs[arg_d], arg_r, arg_v, arg_q)
 	for {
 		track, eof := read_track(reader)
 		if eof == true {

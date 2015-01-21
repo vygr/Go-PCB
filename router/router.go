@@ -47,6 +47,7 @@ type Terminals []*Terminal
 
 type Track struct {
 	Radius float32
+	Gap    float32
 	Terms  Terminals
 }
 
@@ -81,7 +82,7 @@ func (s by_group) Swap(i, j int) {
 }
 func (s by_group) Less(i, j int) bool {
 	if s[i].area == s[j].area {
-		return s[i].radius > s[j].radius
+		return s[i].gap > s[j].gap
 	}
 	return s[i].area > s[j].area
 }
@@ -119,7 +120,6 @@ type Pcb struct {
 	resolution            int
 	verbosity             int
 	quantization          int
-	track_gap             float32
 	layers                *layer.Layers
 	netlist               nets
 	nodes                 []int
@@ -133,14 +133,14 @@ type Pcb struct {
 ////////////////
 
 func NewPcb(dims *Dims, rfvs, rpvs *Vectorss, dfunc func(*mymath.Point, *mymath.Point) float32,
-	res, verb, quant int, tg float32) *Pcb {
+	res, verb, quant int) *Pcb {
 	p := Pcb{}
-	p.Init(dims, rfvs, rpvs, dfunc, res, verb, quant, tg)
+	p.Init(dims, rfvs, rpvs, dfunc, res, verb, quant)
 	return &p
 }
 
 func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
-	dfunc func(*mymath.Point, *mymath.Point) float32, res, verb, quant int, tg float32) {
+	dfunc func(*mymath.Point, *mymath.Point) float32, res, verb, quant int) {
 	self.width = dims.Width
 	self.height = dims.Height
 	self.depth = dims.Depth
@@ -150,7 +150,6 @@ func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
 	self.resolution = res
 	self.verbosity = verb
 	self.quantization = quant * res
-	self.track_gap = tg
 	self.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(res))
 	self.netlist = nil
 	self.width *= res
@@ -172,7 +171,6 @@ func (self *Pcb) Copy() *Pcb {
 	new_pcb.resolution = self.resolution
 	new_pcb.verbosity = self.verbosity
 	new_pcb.quantization = self.quantization
-	new_pcb.track_gap = self.track_gap
 	new_pcb.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(self.resolution))
 	new_pcb.netlist = nil
 	for _, net := range self.netlist {
@@ -185,7 +183,7 @@ func (self *Pcb) Copy() *Pcb {
 
 //add net
 func (self *Pcb) Add_track(t *Track) {
-	self.netlist = append(self.netlist, newnet(t.Terms, t.Radius, *self))
+	self.netlist = append(self.netlist, newnet(t.Terms, t.Radius, t.Gap, *self))
 }
 
 //attempt to route board within time
@@ -202,38 +200,27 @@ func (self *Pcb) Route(timeout float64) bool {
 		if self.netlist[index].route() {
 			index += 1
 		} else {
-			for {
-				self.netlist[index].reset_topology()
-				if index == 0 {
-					self.reset_areas()
-					self.shuffle_netlist()
-					sort.Sort(by_group(self.netlist))
-					hoisted_nets = map[*net]bool{}
-					break
-				} else {
-					index -= 1
-					self.netlist[index].remove()
-					if self.netlist[index].next_topology() {
-						break
-					} else {
-						pos := 0
-						self.netlist, pos = hoist_net(self.netlist, index+1)
-						if hoisted_nets[self.netlist[pos]] {
-							if pos != 0 {
-								self.netlist[pos].area = self.netlist[pos-1].area
-								self.netlist, pos = hoist_net(self.netlist, pos)
-							}
-							delete(hoisted_nets, self.netlist[pos])
-						} else {
-							hoisted_nets[self.netlist[pos]] = true
-						}
-						for index > pos {
-							self.netlist[index].remove()
-							self.netlist[index].reset_topology()
-							index -= 1
-						}
-						break
+			if index == 0 {
+				self.reset_areas()
+				self.shuffle_netlist()
+				sort.Sort(by_group(self.netlist))
+				hoisted_nets = map[*net]bool{}
+			} else {
+				pos := 0
+				self.netlist, pos = hoist_net(self.netlist, index)
+				if hoisted_nets[self.netlist[pos]] {
+					if pos != 0 {
+						self.netlist[pos].area = self.netlist[pos-1].area
+						self.netlist, pos = hoist_net(self.netlist, pos)
 					}
+					delete(hoisted_nets, self.netlist[pos])
+				} else {
+					hoisted_nets[self.netlist[pos]] = true
+				}
+				for index > pos {
+					self.netlist[index].remove()
+					self.netlist[index].shuffle_topology()
+					index -= 1
 				}
 			}
 		}
@@ -346,7 +333,6 @@ func (self *Pcb) all_not_marked(vectors *Vectorss, node *Point) *Vectors {
 //generate all grid points surrounding point, that are nearer the goal point, sorted
 func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal *Point,
 	dfunc func(*mymath.Point, *mymath.Point) float32) *Vectors {
-	yield := make(Vectors, 0, 16)
 	gp := self.grid_to_space_point(goal)
 	distance := float32(self.get_node(node))
 	nodes := &sort_points{}
@@ -356,19 +342,20 @@ func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal *Point,
 			nodes = insert_sort_point(nodes, mn.node, dfunc(mnp, gp))
 		}
 	}
-	for _, node := range *nodes {
-		yield = append(yield, node.node)
+	yield := make(Vectors, len(*nodes), len(*nodes))
+	for i, node := range *nodes {
+		yield[i] = node.node
 	}
 	return &yield
 }
 
 //generate all grid points surrounding point that are not shorting with an existing track
-func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius float32) *Vectors {
+func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, gap float32) *Vectors {
 	yield := make(Vectors, 0, 16)
 	np := self.grid_to_space_point(node)
 	for _, new_node := range *gather {
 		nnp := self.grid_to_space_point(new_node)
-		if !self.layers.Hit_line(np, nnp, radius) {
+		if !self.layers.Hit_line(np, nnp, gap) {
 			yield = append(yield, new_node)
 		}
 	}
@@ -376,7 +363,7 @@ func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius float32) 
 }
 
 //flood fill distances from starts till ends covered
-func (self *Pcb) mark_distances(vectors *Vectorss, radius float32, starts *map[Point]bool, ends *Vectors) {
+func (self *Pcb) mark_distances(vectors *Vectorss, gap float32, starts *map[Point]bool, ends *Vectors) {
 	distance := 1
 	nodes := *starts
 	for len(nodes) > 0 {
@@ -395,7 +382,7 @@ func (self *Pcb) mark_distances(vectors *Vectorss, radius float32, starts *map[P
 		}
 		new_nodes := map[Point]bool{}
 		for node, _ := range nodes {
-			for _, new_node := range *self.all_not_shorting(self.all_not_marked(vectors, &node), &node, radius) {
+			for _, new_node := range *self.all_not_shorting(self.all_not_marked(vectors, &node), &node, gap) {
 				new_nodes[*new_node] = true
 			}
 		}
@@ -460,6 +447,7 @@ type net struct {
 	pcb       Pcb
 	terminals Terminals
 	radius    float32
+	gap       float32
 	area      int
 	bbox      aabb
 	shift     int
@@ -472,9 +460,9 @@ type net struct {
 //private methods
 /////////////////
 
-func newnet(terms Terminals, radius float32, pcb Pcb) *net {
+func newnet(terms Terminals, radius, gap float32, pcb Pcb) *net {
 	n := net{}
-	n.init(terms, radius, pcb)
+	n.init(terms, radius, gap, pcb)
 	return &n
 }
 
@@ -517,9 +505,10 @@ func aabb_terminals(terms Terminals, quantization int) (int, aabb) {
 	return (maxx - minx) * (maxy - miny), rec
 }
 
-func (self *net) init(terms Terminals, radius float32, pcb Pcb) {
+func (self *net) init(terms Terminals, radius, gap float32, pcb Pcb) {
 	self.pcb = pcb
 	self.radius = radius * float32(pcb.resolution)
+	self.gap = gap * float32(pcb.resolution)
 	self.shift = 0
 	self.paths = make(Vectorss, 0)
 	self.terminals = scale_terminals(terms, pcb.resolution)
@@ -545,6 +534,7 @@ func (self *net) copy() *net {
 	new_net := net{}
 	new_net.pcb = self.pcb
 	new_net.radius = self.radius
+	new_net.gap = self.gap
 	new_net.shift = 0
 	new_net.area = self.area
 	new_net.terminals = copy_terminals(self.terminals)
@@ -618,7 +608,7 @@ func (self *net) add_paths_collision_lines() {
 		for i := 1; i < len(path); i++ {
 			p0 := p1
 			p1 = self.pcb.grid_to_space_point(path[i])
-			self.pcb.layers.Add_line(p0, p1, self.radius)
+			self.pcb.layers.Add_line(p0, p1, self.gap)
 		}
 	}
 }
@@ -630,7 +620,7 @@ func (self *net) sub_paths_collision_lines() {
 		for i := 1; i < len(path); i++ {
 			p0 := p1
 			p1 = self.pcb.grid_to_space_point(path[i])
-			self.pcb.layers.Sub_line(p0, p1, self.radius)
+			self.pcb.layers.Sub_line(p0, p1, self.gap)
 		}
 	}
 }
@@ -666,11 +656,9 @@ func (self *net) optimise_paths(paths Vectorss) Vectorss {
 }
 
 //backtrack path from ends to starts
-func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius float32) (Vectors, bool) {
+func (self *net) backtrack_path(vis *map[Point]bool, end *Point, gap float32) (Vectors, bool) {
 	visited := *vis
-	path := make(Vectors, 0)
-	path = append(path, end)
-	dv := &mymath.Point{0, 0, 0}
+	path := Vectors{end}
 	for {
 		path_node := path[len(path)-1]
 		if visited[*path_node] {
@@ -680,31 +668,14 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius float32)
 		nearer_nodes := make(Vectors, 0)
 		for _, node := range *self.pcb.all_not_shorting(
 			self.pcb.all_nearer_sorted(self.pcb.routing_path_vectors, path_node, end, self.pcb.dfunc),
-			path_node, radius) {
+			path_node, gap) {
 			nearer_nodes = append(nearer_nodes, node)
 		}
 		if len(nearer_nodes) == 0 {
 			//no nearer nodes
 			return path, false
 		}
-		next_node := nearer_nodes[0]
-		dv2 := mymath.Norm_3d(self.pcb.grid_to_space_point(path_node))
-		if !visited[*next_node] {
-			for i := 1; i < len(nearer_nodes); i++ {
-				node := nearer_nodes[i]
-				if visited[*node] {
-					next_node = node
-					break
-				}
-				dv1 := mymath.Norm_3d(self.pcb.grid_to_space_point(node))
-				if mymath.Equal_3d(dv, mymath.Sub_3d(dv1, dv2)) {
-					next_node = node
-				}
-			}
-		}
-		dv1 := mymath.Norm_3d(self.pcb.grid_to_space_point(next_node))
-		dv = mymath.Norm_3d(mymath.Sub_3d(dv1, dv2))
-		path = append(path, next_node)
+		path = append(path, nearer_nodes[0])
 	}
 }
 
@@ -716,7 +687,6 @@ func (self *net) route() bool {
 	}
 	self.paths = make(Vectorss, 0)
 	self.sub_terminal_collision_lines()
-	radius := self.radius + (self.pcb.track_gap * float32(self.pcb.resolution))
 	visited := map[Point]bool{}
 	for index := 1; index < len(self.terminals); index++ {
 		for z := 0; z < self.pcb.depth; z++ {
@@ -728,7 +698,7 @@ func (self *net) route() bool {
 			x, y := int(self.terminals[index].Term.X+0.5), int(self.terminals[index].Term.Y+0.5)
 			ends[z] = &Point{x, y, z}
 		}
-		self.pcb.mark_distances(self.pcb.routing_flood_vectors, radius, &visited, &ends)
+		self.pcb.mark_distances(self.pcb.routing_flood_vectors, self.gap, &visited, &ends)
 		e := make(sort_points, 0, len(ends))
 		end_nodes := &e
 		for _, node := range ends {
@@ -736,7 +706,7 @@ func (self *net) route() bool {
 			end_nodes = insert_sort_point(end_nodes, node, float32(mark))
 		}
 		e = *end_nodes
-		path, success := self.backtrack_path(&visited, e[0].node, radius)
+		path, success := self.backtrack_path(&visited, e[0].node, self.gap)
 		self.pcb.unmark_distances()
 		if !success {
 			self.remove()
