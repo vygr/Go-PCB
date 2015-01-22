@@ -121,15 +121,15 @@ func read_track(r *bufio.Reader) (*router.Track, bool) {
 	string, _ := r.ReadString(',')
 	radius, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
 	string, _ = r.ReadString(',')
-	gap, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
-	string, _ = r.ReadString(',')
 	via, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
+	string, _ = r.ReadString(',')
+	gap, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
 	terminals := read_terminals(r)
 	eof = read_until(r, ']')
 	if eof {
 		os.Exit(1)
 	}
-	return &router.Track{float32(radius), float32(gap), float32(via), *terminals}, false
+	return &router.Track{float32(radius), float32(via), float32(gap), *terminals}, false
 }
 
 //setup first board, loop for white..black..white..black...

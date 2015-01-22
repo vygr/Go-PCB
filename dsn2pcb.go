@@ -48,6 +48,11 @@ type rule struct {
 	gap    float64
 }
 
+type circuit struct {
+	via  *string
+	rule *rule
+}
+
 func peek_char(r *bufio.Reader) (byte, bool) {
 	bytes, err := r.Peek(1)
 	if err != nil {
@@ -227,20 +232,46 @@ func main() {
 	ss := "structure"
 	structure_node := search_tree(tree, &ss)
 	num_layers := 0
-	for _, layer_node := range structure_node.branches {
-		if *layer_node.value == "layer" {
+	minx := 1000000.0
+	miny := 1000000.0
+	maxx := -1000000.0
+	maxy := -1000000.0
+	for _, struc_node := range structure_node.branches {
+		if *struc_node.value == "layer" {
 			num_layers++
+		}
+		if *struc_node.value == "boundary" {
+			cords := struc_node.branches[0].branches[2:]
+			for i := 0; i < len(cords); i += 2 {
+				px, _ := strconv.ParseFloat(*cords[i].value, 32)
+				py, _ := strconv.ParseFloat(*cords[i+1].value, 32)
+				px /= 1000.0
+				py /= 1000.0
+				if px < minx {
+					minx = px
+				}
+				if px > maxx {
+					maxx = px
+				}
+				if py < miny {
+					miny = py
+				}
+				if py > maxy {
+					maxy = py
+				}
+			}
 		}
 	}
 
 	ss = "library"
 	library_node := search_tree(tree, &ss)
 	component_map := map[string]*component{}
-	for _, image_node := range library_node.branches {
-		if *image_node.value == "image" {
-			component_name := image_node.branches[0].value
+	rule_map := map[string]*rule{}
+	for _, lib_node := range library_node.branches {
+		if *lib_node.value == "image" {
+			component_name := lib_node.branches[0].value
 			component := component{component_name, map[string]*pin{}}
-			for _, pin_node := range image_node.branches[1:] {
+			for _, pin_node := range lib_node.branches[1:] {
 				if *pin_node.value == "pin" {
 					pin := pin{}
 					pin.form = pin_node.branches[0].value
@@ -255,10 +286,37 @@ func main() {
 						pin.x, _ = strconv.ParseFloat(*pin_node.branches[2].value, 32)
 						pin.y, _ = strconv.ParseFloat(*pin_node.branches[3].value, 32)
 					}
+					pin.x /= 1000.0
+					pin.y /= 1000.0
 					component.pin_map[*pin.name] = &pin
 				}
 			}
 			component_map[*component_name] = &component
+		}
+		if *lib_node.value == "padstack" {
+			rule := rule{0.5, 0.125}
+			if *lib_node.branches[1].branches[0].value == "circle" {
+				rule.radius, _ = strconv.ParseFloat(*lib_node.branches[1].branches[0].branches[1].value, 32)
+				rule.radius /= 2000.0
+			}
+			if *lib_node.branches[1].branches[0].value == "path" {
+				rule.radius, _ = strconv.ParseFloat(*lib_node.branches[1].branches[0].branches[1].value, 32)
+				rule.radius /= 2000.0
+			}
+			if *lib_node.branches[1].branches[0].value == "rect" {
+				minx, _ := strconv.ParseFloat(*lib_node.branches[1].branches[0].branches[1].value, 32)
+				miny, _ := strconv.ParseFloat(*lib_node.branches[1].branches[0].branches[2].value, 32)
+				maxx, _ := strconv.ParseFloat(*lib_node.branches[1].branches[0].branches[3].value, 32)
+				maxy, _ := strconv.ParseFloat(*lib_node.branches[1].branches[0].branches[4].value, 32)
+				xd := maxx - minx
+				yd := maxy - miny
+				r := xd
+				if yd < xd {
+					r = yd
+				}
+				rule.radius = r / 2000.0
+			}
+			rule_map[*lib_node.branches[0].value] = &rule
 		}
 	}
 
@@ -278,14 +336,12 @@ func main() {
 			instance.side = place_tree.branches[3].value
 			instance.angle, _ = strconv.ParseFloat(*place_tree.branches[4].value, 32)
 			instance_map[*instance_name] = &instance
+			instance.x /= 1000.0
+			instance.y /= 1000.0
 		}
 	}
 
-	minx := float32(1000000)
-	miny := float32(1000000)
-	maxx := float32(-1000000)
-	maxy := float32(-1000000)
-	all_tpoints := []router.Tpoint{}
+	all_terminals := router.Terminals{}
 	for _, instance := range instance_map {
 		component := component_map[*instance.comp]
 		for _, pin := range component.pin_map {
@@ -297,9 +353,11 @@ func main() {
 			angle := instance.angle * (math.Pi / 180.0)
 			s := math.Sin(angle)
 			c := math.Cos(angle)
-			px := float32(((c*x - s*y) + instance.x) / 1000.0)
-			py := float32(((s*x + c*y) + instance.y) / 1000.0)
-			all_tpoints = append(all_tpoints, router.Tpoint{px, py, 0.0})
+			px := (c*x - s*y) + instance.x
+			py := (s*x + c*y) + instance.y
+			rule := rule_map[*pin.form]
+			tp := router.Tpoint{float32(px), float32(py), 0.0}
+			all_terminals = append(all_terminals, &router.Terminal{float32(rule.radius), tp})
 			if px < minx {
 				minx = px
 			}
@@ -317,27 +375,31 @@ func main() {
 
 	ss = "network"
 	network_node := search_tree(tree, &ss)
-	rule_map := map[string]*rule{}
+	circuit_map := map[string]*circuit{}
 	for _, node := range network_node.branches {
 		if *node.value == "class" {
-			rule := rule{125, 125}
-			for _, rule_node := range node.branches {
-				if *rule_node.value == "rule" {
-					for _, dims := range rule_node.branches {
+			rule := rule{0.125, 0.125}
+			circuit := circuit{nil, &rule}
+			for _, class_node := range node.branches {
+				if *class_node.value == "rule" {
+					for _, dims := range class_node.branches {
 						if *dims.value == "width" {
 							rule.radius, _ = strconv.ParseFloat(*dims.branches[0].value, 32)
-							rule.radius /= 2.0
+							rule.radius /= 2000.0
 						}
 						if *dims.value == "clearance" {
 							rule.gap, _ = strconv.ParseFloat(*dims.branches[0].value, 32)
-							rule.gap /= 2.0
+							rule.gap /= 2000.0
 						}
 					}
+				}
+				if *class_node.value == "circuit" {
+					circuit.via = class_node.branches[0].branches[0].value
 				}
 			}
 			for _, netname := range node.branches {
 				if netname.branches == nil {
-					rule_map[*netname.value] = &rule
+					circuit_map[*netname.value] = &circuit
 				}
 			}
 		}
@@ -361,43 +423,42 @@ func main() {
 				angle := instance.angle * (math.Pi / 180.0)
 				s := math.Sin(angle)
 				c := math.Cos(angle)
-				px := float32(((c*x - s*y) + instance.x) / 1000.0)
-				py := float32(((s*x + c*y) + instance.y) / 1000.0)
-				term := router.Tpoint{px, py, 0.0}
-				terminals = append(terminals, &router.Terminal{0.5, term})
-
-				for i, t := range all_tpoints {
-					if t == term {
-						all_tpoints = append(all_tpoints[:i], all_tpoints[i+1:]...)
+				px := (c*x - s*y) + instance.x
+				py := (s*x + c*y) + instance.y
+				pin_rule := rule_map[*pin.form]
+				tp := router.Tpoint{float32(px), float32(py), 0.0}
+				term := router.Terminal{float32(pin_rule.radius), tp}
+				terminals = append(terminals, &term)
+				for i, t := range all_terminals {
+					if *t == term {
+						all_terminals = append(all_terminals[:i], all_terminals[i+1:]...)
 						break
 					}
 				}
 			}
-			rule := rule_map[*node.branches[0].value]
-			tracks = append(tracks, router.Track{float32(rule.radius) / 1000.0, float32(rule.gap) / 1000.0, 0.25, terminals})
+			circuit := circuit_map[*node.branches[0].value]
+			net_rule := circuit.rule
+			via_rule := rule_map[*circuit.via]
+			tracks = append(tracks, router.Track{float32(net_rule.radius), float32(via_rule.radius), float32(net_rule.gap), terminals})
 		}
 	}
-	terminals := router.Terminals{}
-	for _, term := range all_tpoints {
-		terminals = append(terminals, &router.Terminal{0.5, term})
-	}
-	tracks = append(tracks, router.Track{0.0, 0.0, 0.0, terminals})
+	tracks = append(tracks, router.Track{0.0, 0.0, 0.0, all_terminals})
 
-	border := float32(arg_b)
-	fmt.Print("[", int(maxx-minx+(border*2)+0.5)+1, ",", int(maxy-miny+(border*2)+0.5)+1, ",", num_layers, "]\n")
+	border := float64(arg_b)
+	fmt.Print("[", int(maxx-minx+(border*2)+0.5), ",", int(maxy-miny+(border*2)+0.5), ",", num_layers, "]\n")
 	for _, track := range tracks {
 		fmt.Print("[")
 		fmt.Print(track.Radius, ",")
-		fmt.Print(track.Gap, ",")
 		fmt.Print(track.Via, ",")
+		fmt.Print(track.Gap, ",")
 		fmt.Print("[")
 		for i, t := range track.Terms {
 			r, x, y, z := t.Radius, t.Term.X, t.Term.Y, t.Term.Z
 			fmt.Print("(")
 			fmt.Print(r, ",")
 			fmt.Print("(")
-			fmt.Print(x-minx+border, ",")
-			fmt.Print(y-miny+border, ",")
+			fmt.Print(x-float32(minx+border), ",")
+			fmt.Print(y-float32(miny+border), ",")
 			fmt.Print(z)
 			fmt.Print("))")
 			if i != (len(track.Terms) - 1) {

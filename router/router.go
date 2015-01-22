@@ -47,8 +47,8 @@ type Terminals []*Terminal
 
 type Track struct {
 	Radius float32
-	Gap    float32
 	Via    float32
+	Gap    float32
 	Terms  Terminals
 }
 
@@ -184,7 +184,7 @@ func (self *Pcb) Copy() *Pcb {
 
 //add net
 func (self *Pcb) Add_track(t *Track) {
-	self.netlist = append(self.netlist, newnet(t.Terms, t.Radius, t.Gap, t.Via, *self))
+	self.netlist = append(self.netlist, newnet(t.Terms, t.Radius, t.Via, t.Gap, *self))
 }
 
 //attempt to route board within time
@@ -351,7 +351,7 @@ func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal *Point,
 }
 
 //generate all grid points surrounding point that are not shorting with an existing track
-func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius, gap, via float32) *Vectors {
+func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius, via, gap float32) *Vectors {
 	yield := make(Vectors, 0, 16)
 	np := self.grid_to_space_point(node)
 	for _, new_node := range *gather {
@@ -372,7 +372,7 @@ func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius, gap, via
 }
 
 //flood fill distances from starts till ends covered
-func (self *Pcb) mark_distances(vectors *Vectorss, radius, gap, via float32, starts *map[Point]bool, ends *Vectors) {
+func (self *Pcb) mark_distances(vectors *Vectorss, radius, via, gap float32, starts *map[Point]bool, ends *Vectors) {
 	distance := 1
 	nodes := *starts
 	for len(nodes) > 0 {
@@ -391,7 +391,7 @@ func (self *Pcb) mark_distances(vectors *Vectorss, radius, gap, via float32, sta
 		}
 		new_nodes := map[Point]bool{}
 		for node, _ := range nodes {
-			for _, new_node := range *self.all_not_shorting(self.all_not_marked(vectors, &node), &node, radius, gap, via) {
+			for _, new_node := range *self.all_not_shorting(self.all_not_marked(vectors, &node), &node, radius, via, gap) {
 				new_nodes[*new_node] = true
 			}
 		}
@@ -469,9 +469,9 @@ type net struct {
 //private methods
 /////////////////
 
-func newnet(terms Terminals, radius, gap, via float32, pcb Pcb) *net {
+func newnet(terms Terminals, radius, via, gap float32, pcb Pcb) *net {
 	n := net{}
-	n.init(terms, radius, gap, via, pcb)
+	n.init(terms, radius, via, gap, pcb)
 	return &n
 }
 
@@ -514,7 +514,7 @@ func aabb_terminals(terms Terminals, quantization int) (int, aabb) {
 	return (maxx - minx) * (maxy - miny), rec
 }
 
-func (self *net) init(terms Terminals, radius, gap, via float32, pcb Pcb) {
+func (self *net) init(terms Terminals, radius, via, gap float32, pcb Pcb) {
 	self.pcb = pcb
 	self.radius = radius * float32(pcb.resolution)
 	self.gap = gap * float32(pcb.resolution)
@@ -647,7 +647,7 @@ func (self *net) optimise_paths(paths Vectorss) Vectorss {
 }
 
 //backtrack path from ends to starts
-func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, gap, via float32) (Vectors, bool) {
+func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, via, gap float32) (Vectors, bool) {
 	visited := *vis
 	path := Vectors{end}
 	for {
@@ -659,7 +659,7 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, gap, vi
 		nearer_nodes := make(Vectors, 0)
 		for _, node := range *self.pcb.all_not_shorting(
 			self.pcb.all_nearer_sorted(self.pcb.routing_path_vectors, path_node, end, self.pcb.dfunc),
-			path_node, radius, gap, via) {
+			path_node, radius, via, gap) {
 			nearer_nodes = append(nearer_nodes, node)
 		}
 		if len(nearer_nodes) == 0 {
