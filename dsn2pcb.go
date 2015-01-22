@@ -335,9 +335,9 @@ func main() {
 			instance.y, _ = strconv.ParseFloat(*place_tree.branches[2].value, 32)
 			instance.side = place_tree.branches[3].value
 			instance.angle, _ = strconv.ParseFloat(*place_tree.branches[4].value, 32)
-			instance_map[*instance_name] = &instance
 			instance.x /= 1000.0
 			instance.y /= 1000.0
+			instance_map[*instance_name] = &instance
 		}
 	}
 
@@ -355,9 +355,9 @@ func main() {
 			c := math.Cos(angle)
 			px := (c*x - s*y) + instance.x
 			py := (s*x + c*y) + instance.y
-			rule := rule_map[*pin.form]
+			pin_rule := rule_map[*pin.form]
 			tp := router.Tpoint{float32(px), float32(py), 0.0}
-			all_terminals = append(all_terminals, &router.Terminal{float32(rule.radius), tp})
+			all_terminals = append(all_terminals, &router.Terminal{float32(pin_rule.radius), tp})
 			if px < minx {
 				minx = px
 			}
@@ -378,18 +378,18 @@ func main() {
 	circuit_map := map[string]*circuit{}
 	for _, node := range network_node.branches {
 		if *node.value == "class" {
-			rule := rule{0.125, 0.125}
-			circuit := circuit{nil, &rule}
+			net_rule := rule{0.125, 0.125}
+			circuit := circuit{nil, &net_rule}
 			for _, class_node := range node.branches {
 				if *class_node.value == "rule" {
 					for _, dims := range class_node.branches {
 						if *dims.value == "width" {
-							rule.radius, _ = strconv.ParseFloat(*dims.branches[0].value, 32)
-							rule.radius /= 2000.0
+							net_rule.radius, _ = strconv.ParseFloat(*dims.branches[0].value, 32)
+							net_rule.radius /= 2000.0
 						}
 						if *dims.value == "clearance" {
-							rule.gap, _ = strconv.ParseFloat(*dims.branches[0].value, 32)
-							rule.gap /= 2000.0
+							net_rule.gap, _ = strconv.ParseFloat(*dims.branches[0].value, 32)
+							net_rule.gap /= 2000.0
 						}
 					}
 				}

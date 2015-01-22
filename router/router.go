@@ -83,9 +83,9 @@ func (s by_group) Swap(i, j int) {
 }
 func (s by_group) Less(i, j int) bool {
 	if s[i].area == s[j].area {
-		return s[i].gap > s[j].gap
+		return s[i].radius > s[j].radius
 	}
-	return s[i].area > s[j].area
+	return s[i].area < s[j].area
 }
 
 ///////////////////////////
@@ -431,7 +431,7 @@ func hoist_net(ns nets, n int) (nets, int) {
 	i := 0
 	if n != 0 {
 		for i = n; i >= 0; i-- {
-			if ns[i].area > ns[n].area {
+			if ns[i].area < ns[n].area {
 				break
 			}
 		}
@@ -456,8 +456,8 @@ type net struct {
 	pcb       Pcb
 	terminals Terminals
 	radius    float32
-	gap       float32
 	via       float32
+	gap       float32
 	area      int
 	bbox      aabb
 	paths     Vectorss
@@ -517,8 +517,8 @@ func aabb_terminals(terms Terminals, quantization int) (int, aabb) {
 func (self *net) init(terms Terminals, radius, via, gap float32, pcb Pcb) {
 	self.pcb = pcb
 	self.radius = radius * float32(pcb.resolution)
-	self.gap = gap * float32(pcb.resolution)
 	self.via = via * float32(pcb.resolution)
+	self.gap = gap * float32(pcb.resolution)
 	self.paths = make(Vectorss, 0)
 	self.terminals = scale_terminals(terms, pcb.resolution)
 	self.area, self.bbox = aabb_terminals(terms, pcb.quantization)
@@ -543,8 +543,8 @@ func (self *net) copy() *net {
 	new_net := net{}
 	new_net.pcb = self.pcb
 	new_net.radius = self.radius
-	new_net.gap = self.gap
 	new_net.via = self.via
+	new_net.gap = self.gap
 	new_net.area = self.area
 	new_net.terminals = copy_terminals(self.terminals)
 	new_net.paths = self.optimise_paths(self.paths[:])
@@ -689,7 +689,7 @@ func (self *net) route() bool {
 			x, y := int(self.terminals[index].Term.X+0.5), int(self.terminals[index].Term.Y+0.5)
 			ends[z] = &Point{x, y, z}
 		}
-		self.pcb.mark_distances(self.pcb.routing_flood_vectors, self.radius, self.gap, self.via, &visited, &ends)
+		self.pcb.mark_distances(self.pcb.routing_flood_vectors, self.radius, self.via, self.gap, &visited, &ends)
 		e := make(sort_points, 0, len(ends))
 		end_nodes := &e
 		for _, node := range ends {
@@ -697,7 +697,7 @@ func (self *net) route() bool {
 			end_nodes = insert_sort_point(end_nodes, node, float32(mark))
 		}
 		e = *end_nodes
-		path, success := self.backtrack_path(&visited, e[0].node, self.radius, self.gap, self.via)
+		path, success := self.backtrack_path(&visited, e[0].node, self.radius, self.via, self.gap)
 		self.pcb.unmark_distances()
 		if !success {
 			self.remove()
