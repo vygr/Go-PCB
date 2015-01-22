@@ -460,7 +460,6 @@ type net struct {
 	via       float32
 	area      int
 	bbox      aabb
-	shift     int
 	paths     Vectorss
 }
 
@@ -520,7 +519,6 @@ func (self *net) init(terms Terminals, radius, gap, via float32, pcb Pcb) {
 	self.radius = radius * float32(pcb.resolution)
 	self.gap = gap * float32(pcb.resolution)
 	self.via = via * float32(pcb.resolution)
-	self.shift = 0
 	self.paths = make(Vectorss, 0)
 	self.terminals = scale_terminals(terms, pcb.resolution)
 	self.area, self.bbox = aabb_terminals(terms, pcb.quantization)
@@ -547,41 +545,10 @@ func (self *net) copy() *net {
 	new_net.radius = self.radius
 	new_net.gap = self.gap
 	new_net.via = self.via
-	new_net.shift = 0
 	new_net.area = self.area
 	new_net.terminals = copy_terminals(self.terminals)
 	new_net.paths = self.optimise_paths(self.paths[:])
 	return &new_net
-}
-
-//shift terminal order
-func shift_terminals(terms Terminals, n int) Terminals {
-	l := len(terms)
-	n = n % l
-	if n < 0 {
-		n += l
-	}
-	if n == 0 {
-		return terms
-	}
-	return append(terms[n:l], terms[:n]...)
-}
-
-//next topology of terminals
-func (self *net) next_topology() bool {
-	self.shift += 1
-	self.terminals = shift_terminals(self.terminals, 1)
-	if self.shift == len(self.terminals) {
-		self.shift = 0
-		return false
-	}
-	return true
-}
-
-//reset terminals to original order
-func (self *net) reset_topology() {
-	self.terminals = shift_terminals(self.terminals, -self.shift)
-	self.shift = 0
 }
 
 //randomize order of terminals
