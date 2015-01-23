@@ -41,6 +41,7 @@ type Tpoint struct {
 }
 type Terminal struct {
 	Radius float32
+	Gap    float32
 	Term   Tpoint
 }
 type Terminals []*Terminal
@@ -479,6 +480,7 @@ func newnet(terms Terminals, radius, via, gap float32, pcb Pcb) *net {
 func scale_terminals(terms Terminals, res int) Terminals {
 	for i := 0; i < len(terms); i++ {
 		terms[i].Radius *= float32(res)
+		terms[i].Gap *= float32(res)
 		terms[i].Term.X *= float32(res)
 		terms[i].Term.Y *= float32(res)
 		terms[i].Term.Z *= float32(res)
@@ -567,16 +569,16 @@ func (self *net) shuffle_topology() {
 //add terminal entries to spacial cache
 func (self *net) add_terminal_collision_lines() {
 	for _, node := range self.terminals {
-		r, x, y := node.Radius, node.Term.X, node.Term.Y
-		self.pcb.layers.Add_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, 0.125)
+		r, g, x, y := node.Radius, node.Gap, node.Term.X, node.Term.Y
+		self.pcb.layers.Add_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, g)
 	}
 }
 
 //remove terminal entries from spacial cache
 func (self *net) sub_terminal_collision_lines() {
 	for _, node := range self.terminals {
-		r, x, y := node.Radius, node.Term.X, node.Term.Y
-		self.pcb.layers.Sub_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, 0.125)
+		r, g, x, y := node.Radius, node.Gap, node.Term.X, node.Term.Y
+		self.pcb.layers.Sub_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, g)
 	}
 }
 
@@ -722,13 +724,12 @@ func (self *net) print_net() {
 	fmt.Print(self.via*scale, ",")
 	fmt.Print("[")
 	for i, t := range self.terminals {
-		r, x, y, z := t.Radius, float32(t.Term.X), float32(t.Term.Y), float32(t.Term.Z)
 		fmt.Print("(")
-		fmt.Print(r*scale, ",")
+		fmt.Print(t.Radius*scale, ",")
 		fmt.Print("(")
-		fmt.Print(x*scale, ",")
-		fmt.Print(y*scale, ",")
-		fmt.Print(z)
+		fmt.Print(t.Term.X*scale, ",")
+		fmt.Print(t.Term.Y*scale, ",")
+		fmt.Print(t.Term.Z)
 		fmt.Print("))")
 		if i != (len(self.terminals) - 1) {
 			fmt.Print(",")

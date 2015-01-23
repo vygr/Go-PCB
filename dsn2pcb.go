@@ -357,7 +357,7 @@ func main() {
 			py := (s*x + c*y) + instance.y
 			pin_rule := rule_map[*pin.form]
 			tp := router.Tpoint{float32(px), float32(py), 0.0}
-			all_terminals = append(all_terminals, &router.Terminal{float32(pin_rule.radius), tp})
+			all_terminals = append(all_terminals, &router.Terminal{float32(pin_rule.radius), float32(pin_rule.gap), tp})
 			if px < minx {
 				minx = px
 			}
@@ -427,7 +427,7 @@ func main() {
 				py := (s*x + c*y) + instance.y
 				pin_rule := rule_map[*pin.form]
 				tp := router.Tpoint{float32(px), float32(py), 0.0}
-				term := router.Terminal{float32(pin_rule.radius), tp}
+				term := router.Terminal{float32(pin_rule.radius), float32(pin_rule.gap), tp}
 				terminals = append(terminals, &term)
 				for i, t := range all_terminals {
 					if *t == term {
@@ -453,13 +453,13 @@ func main() {
 		fmt.Print(track.Gap, ",")
 		fmt.Print("[")
 		for i, t := range track.Terms {
-			r, x, y, z := t.Radius, t.Term.X, t.Term.Y, t.Term.Z
 			fmt.Print("(")
-			fmt.Print(r, ",")
+			fmt.Print(t.Radius, ",")
+			fmt.Print(t.Gap, ",")
 			fmt.Print("(")
-			fmt.Print(x-float32(minx+border), ",")
-			fmt.Print(y-float32(miny+border), ",")
-			fmt.Print(z)
+			fmt.Print(t.Term.X-float32(minx+border), ",")
+			fmt.Print(t.Term.Y-float32(miny+border), ",")
+			fmt.Print(t.Term.Z)
 			fmt.Print("))")
 			if i != (len(track.Terms) - 1) {
 				fmt.Print(",")

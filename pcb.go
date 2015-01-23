@@ -72,7 +72,8 @@ func read_terminal(r *bufio.Reader) *router.Terminal {
 	trim := "()[], "
 	string, _ := r.ReadString(',')
 	radius, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
-	string, _ = r.ReadString('(')
+	string, _ = r.ReadString(',')
+	gap, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
 	string, _ = r.ReadString(',')
 	x, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
 	string, _ = r.ReadString(',')
@@ -83,7 +84,7 @@ func read_terminal(r *bufio.Reader) *router.Terminal {
 	if eof {
 		os.Exit(1)
 	}
-	return &router.Terminal{float32(radius), router.Tpoint{float32(x), float32(y), float32(z)}}
+	return &router.Terminal{float32(radius), float32(gap), router.Tpoint{float32(x), float32(y), float32(z)}}
 }
 
 //read all terminals for one track
