@@ -59,10 +59,15 @@ type circuit struct {
 	rule *rule
 }
 
-func shape_to_cords(s *[]point) *router.Cords {
+func shape_to_cords(shape *[]point, a1, a2 float64) *router.Cords {
 	cords := router.Cords{}
-	for _, p := range *s {
-		cords = append(cords, &router.Cord{float32(p.x), float32(p.y)})
+	rads := math.Mod(a1 + a2, 2 * math.Pi)
+	s := math.Sin(rads)
+	c := math.Cos(rads)
+	for _, p := range *shape {
+		px := (c*p.x - s*p.y)
+		py := (s*p.x + c*p.y)
+		cords = append(cords, &router.Cord{float32(px), float32(py)})
 	}
 	return &cords
 }
@@ -333,6 +338,7 @@ func main() {
 						pin.name = pin_node.branches[2].value
 						pin.x, _ = strconv.ParseFloat(*pin_node.branches[3].value, 32)
 						pin.y, _ = strconv.ParseFloat(*pin_node.branches[4].value, 32)
+						pin.angle = pin.angle * (math.Pi / 180.0)
 					} else {
 						pin.angle = 0.0
 						pin.name = pin_node.branches[1].value
@@ -403,6 +409,7 @@ func main() {
 			instance.y, _ = strconv.ParseFloat(*place_tree.branches[2].value, 32)
 			instance.side = place_tree.branches[3].value
 			instance.angle, _ = strconv.ParseFloat(*place_tree.branches[4].value, 32)
+			instance.angle = instance.angle * (math.Pi / 180.0)
 			instance.x /= 1000.0
 			instance.y /= 1000.0
 			instance_map[*instance_name] = &instance
@@ -418,14 +425,13 @@ func main() {
 			if *instance.side != "front" {
 				x = -x
 			}
-			angle := instance.angle * (math.Pi / 180.0)
-			s := math.Sin(angle)
-			c := math.Cos(angle)
+			s := math.Sin(instance.angle)
+			c := math.Cos(instance.angle)
 			px := (c*x - s*y) + instance.x
 			py := (s*x + c*y) + instance.y
 			pin_rule := rule_map[*pin.form]
 			tp := router.Tpoint{float32(px), float32(py), 0.0}
-			cords := shape_to_cords(pin_rule.shape)
+			cords := shape_to_cords(pin_rule.shape, pin.angle, instance.angle)
 			all_terminals = append(all_terminals, &router.Terminal{float32(pin_rule.radius), float32(pin_rule.gap), tp, *cords})
 			if px < minx {
 				minx = px
@@ -489,14 +495,13 @@ func main() {
 				if *instance.side != "front" {
 					x = -x
 				}
-				angle := instance.angle * (math.Pi / 180.0)
-				s := math.Sin(angle)
-				c := math.Cos(angle)
+				s := math.Sin(instance.angle)
+				c := math.Cos(instance.angle)
 				px := (c*x - s*y) + instance.x
 				py := (s*x + c*y) + instance.y
 				pin_rule := rule_map[*pin.form]
 				tp := router.Tpoint{float32(px), float32(py), 0.0}
-				cords := shape_to_cords(pin_rule.shape)
+				cords := shape_to_cords(pin_rule.shape, pin.angle, instance.angle)
 				term := router.Terminal{float32(pin_rule.radius), float32(pin_rule.gap), tp, *cords}
 				terminals = append(terminals, &term)
 				for i, t := range all_terminals {
