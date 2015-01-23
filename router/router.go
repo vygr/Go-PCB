@@ -162,7 +162,7 @@ func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
 	self.verbosity = verb
 	self.quantization = quant * res
 	self.minz = minz
-	self.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(res))
+	self.layers = layer.NewLayers(layer.Dims{self.width*3, self.height*3, self.depth}, 3.0/float32(res))
 	self.netlist = nil
 	self.width *= res
 	self.height *= res
