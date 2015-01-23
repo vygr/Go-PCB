@@ -39,10 +39,18 @@ type Tpoint struct {
 	Y float32
 	Z float32
 }
+
+type Cord struct {
+	X float32
+	Y float32
+}
+type Cords []*Cord
+
 type Terminal struct {
 	Radius float32
 	Gap    float32
 	Term   Tpoint
+	Shape  Cords
 }
 type Terminals []*Terminal
 
@@ -122,6 +130,7 @@ type Pcb struct {
 	resolution            int
 	verbosity             int
 	quantization          int
+	minz                  bool
 	layers                *layer.Layers
 	netlist               nets
 	nodes                 []int
@@ -135,14 +144,14 @@ type Pcb struct {
 ////////////////
 
 func NewPcb(dims *Dims, rfvs, rpvs *Vectorss, dfunc func(*mymath.Point, *mymath.Point) float32,
-	res, verb, quant int) *Pcb {
+	res, verb, quant int, minz bool) *Pcb {
 	p := Pcb{}
-	p.Init(dims, rfvs, rpvs, dfunc, res, verb, quant)
+	p.Init(dims, rfvs, rpvs, dfunc, res, verb, quant, minz)
 	return &p
 }
 
 func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
-	dfunc func(*mymath.Point, *mymath.Point) float32, res, verb, quant int) {
+	dfunc func(*mymath.Point, *mymath.Point) float32, res, verb, quant int, minz bool) {
 	self.width = dims.Width
 	self.height = dims.Height
 	self.depth = dims.Depth
@@ -152,6 +161,7 @@ func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
 	self.resolution = res
 	self.verbosity = verb
 	self.quantization = quant * res
+	self.minz = minz
 	self.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(res))
 	self.netlist = nil
 	self.width *= res
@@ -173,6 +183,7 @@ func (self *Pcb) Copy() *Pcb {
 	new_pcb.resolution = self.resolution
 	new_pcb.verbosity = self.verbosity
 	new_pcb.quantization = self.quantization
+	new_pcb.minz = self.minz
 	new_pcb.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(self.resolution))
 	new_pcb.netlist = nil
 	for _, net := range self.netlist {
@@ -199,7 +210,7 @@ func (self *Pcb) Route(timeout float64) bool {
 	index := 0
 	start_time := time.Now()
 	for index < len(self.netlist) {
-		if self.netlist[index].route() {
+		if self.netlist[index].route(self.minz) {
 			index += 1
 		} else {
 			if index == 0 {
@@ -268,6 +279,29 @@ func (self *Pcb) Print_netlist() {
 		net.print_net()
 	}
 	fmt.Println("[]")
+}
+
+//output stats to screen
+func (self *Pcb) Print_stats() {
+	num_vias := 0
+	num_terminals := 0
+	num_nets := len(self.netlist)
+	for _, net := range self.netlist {
+		num_terminals += len(net.terminals)
+		for _, path := range net.paths {
+			p1 := *path[0]
+			for _, node := range path[1:] {
+				p0 := p1
+				p1 = *node
+				if p0.Z != p1.Z {
+					num_vias++
+				}
+			}
+		}
+	}
+	println("Number of Terminals:", num_terminals)
+	println("Number of Nets:", num_nets)
+	println("Number of Vias:", num_vias)
 }
 
 /////////////////
@@ -569,16 +603,38 @@ func (self *net) shuffle_topology() {
 //add terminal entries to spacial cache
 func (self *net) add_terminal_collision_lines() {
 	for _, node := range self.terminals {
-		r, g, x, y := node.Radius, node.Gap, node.Term.X, node.Term.Y
-		self.pcb.layers.Add_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, g)
+		r, g, x, y, shape := node.Radius, node.Gap, node.Term.X, node.Term.Y, node.Shape
+		if len(shape) == 0 {
+			self.pcb.layers.Add_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, g)
+		} else {
+			for z := 0; z < self.pcb.depth; z++ {
+				p1 := &mymath.Point{x + shape[0].X, y + shape[0].Y, float32(z)}
+				for _, cord := range shape[1:] {
+					p0 := p1
+					p1 = &mymath.Point{x + cord.X, y + cord.Y, float32(z)}
+					self.pcb.layers.Add_line(p0, p1, r, g)
+				}
+			}
+		}
 	}
 }
 
 //remove terminal entries from spacial cache
 func (self *net) sub_terminal_collision_lines() {
 	for _, node := range self.terminals {
-		r, g, x, y := node.Radius, node.Gap, node.Term.X, node.Term.Y
-		self.pcb.layers.Sub_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, g)
+		r, g, x, y, shape := node.Radius, node.Gap, node.Term.X, node.Term.Y, node.Shape
+		if len(shape) == 0 {
+			self.pcb.layers.Sub_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, g)
+		} else {
+			for z := 0; z < self.pcb.depth; z++ {
+				p1 := &mymath.Point{x + shape[0].X, y + shape[0].Y, float32(z)}
+				for _, cord := range shape[1:] {
+					p0 := p1
+					p1 = &mymath.Point{x + cord.X, y + cord.Y, float32(z)}
+					self.pcb.layers.Sub_line(p0, p1, r, g)
+				}
+			}
+		}
 	}
 }
 
@@ -649,7 +705,7 @@ func (self *net) optimise_paths(paths Vectorss) Vectorss {
 }
 
 //backtrack path from ends to starts
-func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, via, gap float32) (Vectors, bool) {
+func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, via, gap float32, minz bool) (Vectors, bool) {
 	visited := *vis
 	path := Vectors{end}
 	for {
@@ -668,12 +724,21 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, via, ga
 			//no nearer nodes
 			return path, false
 		}
-		path = append(path, nearer_nodes[0])
+		next_node := nearer_nodes[0]
+		if minz {
+			for _, node := range nearer_nodes {
+				if node.Z == path_node.Z {
+					next_node = node
+					break
+				}
+			}
+		}
+		path = append(path, next_node)
 	}
 }
 
 //attempt to route this net on the current boards state
-func (self *net) route() bool {
+func (self *net) route(minz bool) bool {
 	if self.radius == 0.0 {
 		//unused terminals track !
 		return true
@@ -695,11 +760,10 @@ func (self *net) route() bool {
 		e := make(sort_points, 0, len(ends))
 		end_nodes := &e
 		for _, node := range ends {
-			mark := self.pcb.get_node(node)
-			end_nodes = insert_sort_point(end_nodes, node, float32(mark))
+			end_nodes = insert_sort_point(end_nodes, node, float32(self.pcb.get_node(node)))
 		}
 		e = *end_nodes
-		path, success := self.backtrack_path(&visited, e[0].node, self.radius, self.via, self.gap)
+		path, success := self.backtrack_path(&visited, e[0].node, self.radius, self.via, self.gap, minz)
 		self.pcb.unmark_distances()
 		if !success {
 			self.remove()
@@ -719,18 +783,21 @@ func (self *net) route() bool {
 //output net, terminals and paths, for viewer app
 func (self *net) print_net() {
 	scale := 1.0 / float32(self.pcb.resolution)
-	fmt.Print("[")
-	fmt.Print(self.radius*scale, ",")
-	fmt.Print(self.via*scale, ",")
-	fmt.Print("[")
+	fmt.Print("[", self.radius*scale, ",")
+	fmt.Print(self.via*scale, ",[")
 	for i, t := range self.terminals {
-		fmt.Print("(")
-		fmt.Print(t.Radius*scale, ",")
-		fmt.Print("(")
+		fmt.Print("(", t.Radius*scale, ",(")
 		fmt.Print(t.Term.X*scale, ",")
 		fmt.Print(t.Term.Y*scale, ",")
-		fmt.Print(t.Term.Z)
-		fmt.Print("))")
+		fmt.Print(t.Term.Z, "),[")
+		for j, c := range t.Shape {
+			fmt.Print("(", c.X, ",")
+			fmt.Print(c.Y, ")")
+			if j != (len(t.Shape) - 1) {
+				fmt.Print(",")
+			}
+		}
+		fmt.Print("])")
 		if i != (len(self.terminals) - 1) {
 			fmt.Print(",")
 		}
@@ -741,11 +808,9 @@ func (self *net) print_net() {
 		for j, p := range path {
 			psp := self.pcb.grid_to_space_point(p)
 			sp := *psp
-			fmt.Print("(")
-			fmt.Print(sp[0]*scale, ",")
+			fmt.Print("(", sp[0]*scale, ",")
 			fmt.Print(sp[1]*scale, ",")
-			fmt.Print(sp[2])
-			fmt.Print(")")
+			fmt.Print(sp[2], ")")
 			if j != (len(path) - 1) {
 				fmt.Print(",")
 			}
@@ -756,4 +821,5 @@ func (self *net) print_net() {
 		}
 	}
 	fmt.Println("]]")
+	return
 }

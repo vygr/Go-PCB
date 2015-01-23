@@ -47,7 +47,7 @@ func read_until(r *bufio.Reader, c byte) bool {
 	}
 }
 
-//read width, height, depth of pcb
+//read, [width, height, depth]
 func read_dimentions(r *bufio.Reader) *router.Dims {
 	eof := read_until(r, '[')
 	if eof {
@@ -63,7 +63,42 @@ func read_dimentions(r *bufio.Reader) *router.Dims {
 	return &router.Dims{int(width), int(height), int(depth)}
 }
 
-//read one terminal, radius, x, y, z
+//read, (x, y)
+func read_cord(r *bufio.Reader) *router.Cord {
+	eof := read_until(r, '(')
+	if eof {
+		os.Exit(1)
+	}
+	trim := "()[], "
+	string, _ := r.ReadString(',')
+	x, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
+	string, _ = r.ReadString(')')
+	y, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
+	return &router.Cord{float32(x), float32(y)}
+}
+
+//read, [(x, y), ...]
+func read_shape(r *bufio.Reader) *router.Cords {
+	eof := read_until(r, '[')
+	if eof {
+		os.Exit(1)
+	}
+	cords := router.Cords{}
+	for {
+		bytes, _ := r.Peek(1)
+		if bytes[0] == ']' {
+			break
+		}
+		cords = append(cords, read_cord(r))
+	}
+	eof = read_until(r, ']')
+	if eof {
+		os.Exit(1)
+	}
+	return &cords
+}
+
+//read, (radius, gap, (x, y, z), [(x, y), ...])
 func read_terminal(r *bufio.Reader) *router.Terminal {
 	eof := read_until(r, '(')
 	if eof {
@@ -78,13 +113,14 @@ func read_terminal(r *bufio.Reader) *router.Terminal {
 	x, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
 	string, _ = r.ReadString(',')
 	y, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
-	string, _ = r.ReadString(')')
+	string, _ = r.ReadString(',')
 	z, _ := strconv.ParseFloat(strings.Trim(string, trim), 32)
+	shape := read_shape(r)
 	eof = read_until(r, ')')
 	if eof {
 		os.Exit(1)
 	}
-	return &router.Terminal{float32(radius), float32(gap), router.Tpoint{float32(x), float32(y), float32(z)}}
+	return &router.Terminal{float32(radius), float32(gap), router.Tpoint{float32(x), float32(y), float32(z)}, *shape}
 }
 
 //read all terminals for one track
@@ -140,6 +176,7 @@ func main() {
 	var arg_t float64
 	var arg_v int
 	var arg_s int
+	var arg_z bool
 	var arg_r int
 	var arg_q int
 	var arg_d int
@@ -148,6 +185,7 @@ func main() {
 	var arg_yr int
 	flag.Float64Var(&arg_t, "t", 600.0, "timeout in seconds, default 600")
 	flag.IntVar(&arg_v, "v", 0, "verbosity level 0..1, default 0")
+	flag.BoolVar(&arg_z, "z", false, "minimize vias")
 	flag.IntVar(&arg_s, "s", 1, "number of samples, default 1")
 	flag.IntVar(&arg_r, "r", 1, "grid resolution 1..4, default 1")
 	flag.IntVar(&arg_d, "d", 0, "distance metric 0..5, default 0.\n\t0 -> manhattan\n\t1 -> squared_euclidean\n\t2 -> euclidean\n\t3 -> chebyshev\n\t4 -> reciprocal\n\t5 -> random")
@@ -192,7 +230,7 @@ func main() {
 	//create pcb object and populate with tracks from input
 	dimensions := read_dimentions(reader)
 	pcb := router.NewPcb(dimensions, &routing_flood_vectorss, &routing_path_vectorss,
-		dfuncs[arg_d], arg_r, arg_v, arg_q)
+		dfuncs[arg_d], arg_r, arg_v, arg_q, arg_z)
 	for {
 		track, eof := read_track(reader)
 		if eof == true {
@@ -219,6 +257,7 @@ func main() {
 	}
 	if best_pcb != nil {
 		best_pcb.Print_netlist()
+		best_pcb.Print_stats()
 	} else {
 		fmt.Println("[]")
 	}
