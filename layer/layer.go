@@ -189,7 +189,7 @@ func (self *layer) hit_line(l *line) bool {
 			for _, record := range self.buckets[y*self.width+x] {
 				if record.id != self.test {
 					record.id = self.test
-					r := l.radius
+					r := l.radius + record.line.radius
 					if l.gap >= record.line.gap {
 						r += l.gap
 					} else {
@@ -199,7 +199,7 @@ func (self *layer) hit_line(l *line) bool {
 						l1_p1, l1_p2,
 						&mymath.Point{record.line.p1.x, record.line.p1.y},
 						&mymath.Point{record.line.p2.x, record.line.p2.y},
-						r, record.line.radius) {
+						r) {
 						return true
 					}
 				}

@@ -21,7 +21,7 @@ python view.py anim
 Format of .pcb input file or stdin is:
 
 [width, height, depth]
-[track_radius, via_radius, gap_width, [(terminal_radius, (x, y, z)), ...]...]
+[track_radius, via_radius, track_gap, [(terminal_radius, terminal_gap, (x, y, z)), ...]...]
 
 You can stop a netlist early by just putting:
 
@@ -30,13 +30,13 @@ You can stop a netlist early by just putting:
 For example:
 
 [width, height, depth]
-[track_radius, via_radius, gap_width, [(terminal_radius, (x, y, z)), ...]...]
-[track_radius, via_radius, gap_width, [(terminal_radius, (x, y, z)), ...]...]
+[track_radius, via_radius, track_gap, [(terminal_radius, terminal_gap, (x, y, z)), ...]...]
+[track_radius, via_radius, track_gap, [(terminal_radius, terminal_gap, (x, y, z)), ...]...]
 []
-[track_radius, via_radius, gap_width, [(terminal_radius, (x, y, z)), ...]...]
-[track_radius, via_radius, gap_width, [(terminal_radius, (x, y, z)), ...]...]
+[track_radius, via_radius, track_gap, [(terminal_radius, terminal_gap, (x, y, z)), ...]...]
+[track_radius, via_radius, track_gap, [(terminal_radius, terminal_gap, (x, y, z)), ...]...]
 
-Format of the view.py input is similar but has the track paths appended:
+Format of the view.py input is similar but has the track paths appended and the gaps removed:
 
 [width, height, depth]
 [track_radius, via_radius, [(terminal_radius, (x, y, z)), ...]...], [(x, y, z), ...]]
