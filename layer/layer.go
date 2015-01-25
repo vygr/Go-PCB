@@ -77,14 +77,14 @@ func (self *layer) init(dims dims, s float32) {
 }
 
 func (self *layer) aabb(l *line) *aabb {
-	x1, y1, x2, y2, r, g := l.p1.x, l.p1.y, l.p2.x, l.p2.y, l.radius, l.gap
+	x1, y1, x2, y2 := l.p1.x, l.p1.y, l.p2.x, l.p2.y
 	if x1 > x2 {
 		x1, x2 = x2, x1
 	}
 	if y1 > y2 {
 		y1, y2 = y2, y1
 	}
-	r += g
+	r := l.radius + l.gap
 	minx := int(math.Floor(float64((x1 - r) * self.scale)))
 	miny := int(math.Floor(float64((y1 - r) * self.scale)))
 	maxx := int(math.Ceil(float64((x2 + r) * self.scale)))
@@ -102,33 +102,6 @@ func (self *layer) aabb(l *line) *aabb {
 		maxy = self.height
 	}
 	return &aabb{minx, miny, maxx, maxy}
-}
-
-func (self *layer) all_buckets(bb *aabb) *[]int {
-	num_buckets := (bb.maxx - bb.minx) * (bb.maxy - bb.miny)
-	yield := make([]int, num_buckets, num_buckets)
-	i := 0
-	for y := bb.miny; y < bb.maxy; y++ {
-		for x := bb.minx; x < bb.maxx; x++ {
-			yield[i] = y*self.width + x
-			i++
-		}
-	}
-	return &yield
-}
-
-func (self *layer) all_not_empty_buckets(bb *aabb) *[]int {
-	num_buckets := (bb.maxx - bb.minx) * (bb.maxy - bb.miny)
-	yield := make([]int, 0, num_buckets)
-	for y := bb.miny; y < bb.maxy; y++ {
-		for x := bb.minx; x < bb.maxx; x++ {
-			b := y*self.width + x
-			if len(self.buckets[b]) > 0 {
-				yield = append(yield, b)
-			}
-		}
-	}
-	return &yield
 }
 
 func lines_equal(l1, l2 *line) bool {
@@ -155,25 +128,33 @@ func lines_equal(l1, l2 *line) bool {
 
 func (self *layer) add_line(l *line) {
 	new_record := &record{0, *l}
-	for _, b := range *self.all_buckets(self.aabb(l)) {
-		found := false
-		for _, record := range self.buckets[b] {
-			if lines_equal(&record.line, l) {
-				found = true
-				break
+	bb := self.aabb(l)
+	for y := bb.miny; y < bb.maxy; y++ {
+		for x := bb.minx; x < bb.maxx; x++ {
+			b := y*self.width + x
+			found := false
+			for _, record := range self.buckets[b] {
+				if lines_equal(&record.line, l) {
+					found = true
+					break
+				}
 			}
-		}
-		if !found {
-			self.buckets[b] = append(self.buckets[b], new_record)
+			if !found {
+				self.buckets[b] = append(self.buckets[b], new_record)
+			}
 		}
 	}
 }
 
 func (self *layer) sub_line(l *line) {
-	for _, b := range *self.all_not_empty_buckets(self.aabb(l)) {
-		for i := len(self.buckets[b]) - 1; i >= 0; i-- {
-			if lines_equal(&self.buckets[b][i].line, l) {
-				self.buckets[b] = append(self.buckets[b][:i], self.buckets[b][i+1:]...)
+	bb := self.aabb(l)
+	for y := bb.miny; y < bb.maxy; y++ {
+		for x := bb.minx; x < bb.maxx; x++ {
+			b := y*self.width + x
+			for i := len(self.buckets[b]) - 1; i >= 0; i-- {
+				if lines_equal(&self.buckets[b][i].line, l) {
+					self.buckets[b] = append(self.buckets[b][:i], self.buckets[b][i+1:]...)
+				}
 			}
 		}
 	}
@@ -251,48 +232,44 @@ func (self *Layers) Init(dm Dims, s float32) *Layers {
 func (self *Layers) Add_line(pp1, pp2 *mymath.Point, r, g float32) {
 	p1 := *pp1
 	p2 := *pp2
-	lp1 := point{p1[0], p1[1]}
-	lp2 := point{p2[0], p2[1]}
-	for _, layer := range *self.all_layers(p1[2], p2[2]) {
-		layer.add_line(&line{lp1, lp2, r, g})
+	z1 := int(p1[2])
+	z2 := int(p2[2])
+	if z1 > z2 {
+		z1, z2 = z2, z1
+	}
+	line := &line{point{p1[0], p1[1]}, point{p2[0], p2[1]}, r, g}
+	for z := z1; z <= z2; z++ {
+		self.layers[z].add_line(line)
 	}
 }
 
 func (self *Layers) Sub_line(pp1, pp2 *mymath.Point, r, g float32) {
 	p1 := *pp1
 	p2 := *pp2
-	lp1 := point{p1[0], p1[1]}
-	lp2 := point{p2[0], p2[1]}
-	for _, layer := range *self.all_layers(p1[2], p2[2]) {
-		layer.sub_line(&line{lp1, lp2, r, g})
+	z1 := int(p1[2])
+	z2 := int(p2[2])
+	if z1 > z2 {
+		z1, z2 = z2, z1
+	}
+	line := &line{point{p1[0], p1[1]}, point{p2[0], p2[1]}, r, g}
+	for z := z1; z <= z2; z++ {
+		self.layers[z].sub_line(line)
 	}
 }
 
 func (self *Layers) Hit_line(pp1, pp2 *mymath.Point, r, g float32) bool {
 	p1 := *pp1
 	p2 := *pp2
-	lp1 := point{p1[0], p1[1]}
-	lp2 := point{p2[0], p2[1]}
-	for _, layer := range *self.all_layers(p1[2], p2[2]) {
-		if layer.hit_line(&line{lp1, lp2, r, g}) {
+	z1 := int(p1[2])
+	z2 := int(p2[2])
+	if z1 > z2 {
+		z1, z2 = z2, z1
+	}
+	line := &line{point{p1[0], p1[1]}, point{p2[0], p2[1]}, r, g}
+	for z := z1; z <= z2; z++ {
+		if self.layers[z].hit_line(line) {
 			return true
 		}
 	}
 	return false
-}
-
-/////////////////
-//private methods
-/////////////////
-
-func (self *Layers) all_layers(z1, z2 float32) *[]*layer {
-	if z1 != z2 {
-		yield := make([]*layer, self.depth, self.depth)
-		for z := 0; z < self.depth; z++ {
-			yield[z] = self.layers[z]
-		}
-		return &yield
-	} else {
-		return &[]*layer{self.layers[int(z1)]}
-	}
 }

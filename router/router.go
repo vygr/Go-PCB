@@ -184,7 +184,7 @@ func (self *Pcb) Copy() *Pcb {
 	new_pcb.verbosity = self.verbosity
 	new_pcb.quantization = self.quantization
 	new_pcb.minz = self.minz
-	new_pcb.layers = layer.NewLayers(layer.Dims{self.width, self.height, self.depth}, 1.0/float32(self.resolution))
+	new_pcb.layers = layer.NewLayers(layer.Dims{self.width*3, self.height*3, self.depth}, 3.0/float32(self.resolution))
 	new_pcb.netlist = nil
 	for _, net := range self.netlist {
 		new_pcb.netlist = append(new_pcb.netlist, net.copy())
@@ -605,13 +605,13 @@ func (self *net) add_terminal_collision_lines() {
 	for _, node := range self.terminals {
 		r, g, x, y, shape := node.Radius, node.Gap, node.Term.X, node.Term.Y, node.Shape
 		if len(shape) == 0 {
-			self.pcb.layers.Add_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, g)
+			self.pcb.layers.Add_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth-1)}, r, g)
 		} else {
 			for z := 0; z < self.pcb.depth; z++ {
 				p1 := &mymath.Point{x + shape[0].X, y + shape[0].Y, float32(z)}
-				for _, cord := range shape[1:] {
+				for i := 1; i < len(shape); i++ {
 					p0 := p1
-					p1 = &mymath.Point{x + cord.X, y + cord.Y, float32(z)}
+					p1 = &mymath.Point{x + shape[i].X, y + shape[i].Y, float32(z)}
 					self.pcb.layers.Add_line(p0, p1, r, g)
 				}
 			}
@@ -624,13 +624,13 @@ func (self *net) sub_terminal_collision_lines() {
 	for _, node := range self.terminals {
 		r, g, x, y, shape := node.Radius, node.Gap, node.Term.X, node.Term.Y, node.Shape
 		if len(shape) == 0 {
-			self.pcb.layers.Sub_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth)}, r, g)
+			self.pcb.layers.Sub_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth-1)}, r, g)
 		} else {
 			for z := 0; z < self.pcb.depth; z++ {
 				p1 := &mymath.Point{x + shape[0].X, y + shape[0].Y, float32(z)}
-				for _, cord := range shape[1:] {
+				for i := 1; i < len(shape); i++ {
 					p0 := p1
-					p1 = &mymath.Point{x + cord.X, y + cord.Y, float32(z)}
+					p1 = &mymath.Point{x + shape[i].X, y + shape[i].Y, float32(z)}
 					self.pcb.layers.Sub_line(p0, p1, r, g)
 				}
 			}
@@ -784,9 +784,11 @@ func (self *net) route(minz bool) bool {
 func (self *net) print_net() {
 	scale := 1.0 / float32(self.pcb.resolution)
 	fmt.Print("[", self.radius*scale, ",")
-	fmt.Print(self.via*scale, ",[")
+	fmt.Print(self.via*scale, ",")
+	fmt.Print(self.gap*scale, ",[")
 	for i, t := range self.terminals {
-		fmt.Print("(", t.Radius*scale, ",(")
+		fmt.Print("(", t.Radius*scale, ",")
+		fmt.Print(t.Gap*scale, ",(")
 		fmt.Print(t.Term.X*scale, ",")
 		fmt.Print(t.Term.Y*scale, ",")
 		fmt.Print(t.Term.Z, "),[")
