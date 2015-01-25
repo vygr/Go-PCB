@@ -163,8 +163,10 @@ func (self *layer) sub_line(l *line) {
 func (self *layer) hit_line(l *line) bool {
 	self.test += 1
 	bb := self.aabb(l)
-	l1_p1 := &mymath.Point{l.p1.x, l.p1.y}
-	l1_p2 := &mymath.Point{l.p2.x, l.p2.y}
+	l1_p1 := mymath.Point{l.p1.x, l.p1.y}
+	l1_p2 := mymath.Point{l.p2.x, l.p2.y}
+	l2_p1 := mymath.Point{0.0, 0.0}
+	l2_p2 := mymath.Point{0.0, 0.0}
 	for y := bb.miny; y < bb.maxy; y++ {
 		for x := bb.minx; x < bb.maxx; x++ {
 			for _, record := range self.buckets[y*self.width+x] {
@@ -176,11 +178,9 @@ func (self *layer) hit_line(l *line) bool {
 					} else {
 						r += record.line.gap
 					}
-					if mymath.Collide_thick_lines_2d(
-						l1_p1, l1_p2,
-						&mymath.Point{record.line.p1.x, record.line.p1.y},
-						&mymath.Point{record.line.p2.x, record.line.p2.y},
-						r) {
+					l2_p1[0], l2_p1[1] = record.line.p1.x, record.line.p1.y
+					l2_p2[0], l2_p2[1] = record.line.p2.x, record.line.p2.y
+					if mymath.Collide_thick_lines_2d(&l1_p1, &l1_p2, &l2_p1, &l2_p2, r) {
 						return true
 					}
 				}
@@ -237,9 +237,9 @@ func (self *Layers) Add_line(pp1, pp2 *mymath.Point, r, g float32) {
 	if z1 > z2 {
 		z1, z2 = z2, z1
 	}
-	line := &line{point{p1[0], p1[1]}, point{p2[0], p2[1]}, r, g}
+	line := line{point{p1[0], p1[1]}, point{p2[0], p2[1]}, r, g}
 	for z := z1; z <= z2; z++ {
-		self.layers[z].add_line(line)
+		self.layers[z].add_line(&line)
 	}
 }
 
@@ -251,9 +251,9 @@ func (self *Layers) Sub_line(pp1, pp2 *mymath.Point, r, g float32) {
 	if z1 > z2 {
 		z1, z2 = z2, z1
 	}
-	line := &line{point{p1[0], p1[1]}, point{p2[0], p2[1]}, r, g}
+	line := line{point{p1[0], p1[1]}, point{p2[0], p2[1]}, r, g}
 	for z := z1; z <= z2; z++ {
-		self.layers[z].sub_line(line)
+		self.layers[z].sub_line(&line)
 	}
 }
 
@@ -265,9 +265,9 @@ func (self *Layers) Hit_line(pp1, pp2 *mymath.Point, r, g float32) bool {
 	if z1 > z2 {
 		z1, z2 = z2, z1
 	}
-	line := &line{point{p1[0], p1[1]}, point{p2[0], p2[1]}, r, g}
+	line := line{point{p1[0], p1[1]}, point{p2[0], p2[1]}, r, g}
 	for z := z1; z <= z2; z++ {
-		if self.layers[z].hit_line(line) {
+		if self.layers[z].hit_line(&line) {
 			return true
 		}
 	}

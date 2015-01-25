@@ -518,6 +518,10 @@ func scale_terminals(terms Terminals, res int) Terminals {
 		terms[i].Term.X *= float32(res)
 		terms[i].Term.Y *= float32(res)
 		terms[i].Term.Z *= float32(res)
+		for _, cord := range terms[i].Shape {
+			cord.X *= float32(res)
+			cord.Y *= float32(res)
+		}
 	}
 	return terms
 }
@@ -793,8 +797,8 @@ func (self *net) print_net() {
 		fmt.Print(t.Term.Y*scale, ",")
 		fmt.Print(t.Term.Z, "),[")
 		for j, c := range t.Shape {
-			fmt.Print("(", c.X, ",")
-			fmt.Print(c.Y, ")")
+			fmt.Print("(", c.X*scale, ",")
+			fmt.Print(c.Y*scale, ")")
 			if j != (len(t.Shape) - 1) {
 				fmt.Print(",")
 			}
