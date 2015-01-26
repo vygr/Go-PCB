@@ -678,7 +678,7 @@ func (self *net) sub_paths_collision_lines() {
 	}
 }
 
-//remove net entries from spacial grid, terminal
+//remove net entries from spacial grid
 func (self *net) remove() {
 	self.sub_paths_collision_lines()
 	self.sub_terminal_collision_lines()
