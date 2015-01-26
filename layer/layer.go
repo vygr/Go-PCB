@@ -127,7 +127,7 @@ func lines_equal(l1, l2 *line) bool {
 }
 
 func (self *layer) add_line(l *line) {
-	new_record := &record{0, *l}
+	new_record := record{0, *l}
 	bb := self.aabb(l)
 	for y := bb.miny; y < bb.maxy; y++ {
 		for x := bb.minx; x < bb.maxx; x++ {
@@ -140,7 +140,7 @@ func (self *layer) add_line(l *line) {
 				}
 			}
 			if !found {
-				self.buckets[b] = append(self.buckets[b], new_record)
+				self.buckets[b] = append(self.buckets[b], &new_record)
 			}
 		}
 	}

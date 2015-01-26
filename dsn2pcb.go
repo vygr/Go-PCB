@@ -537,18 +537,12 @@ func main() {
 	border := float64(arg_b)
 	fmt.Print("[", int(maxx-minx+(border*2)+0.5), ",", int(maxy-miny+(border*2)+0.5), ",", num_layers, "]\n")
 	for _, track := range tracks {
-		fmt.Print("[", track.Radius, ",")
-		fmt.Print(track.Via, ",")
-		fmt.Print(track.Gap, ",[")
+		fmt.Print("[", track.Radius, ",", track.Via, ",", track.Gap, ",[")
 		for i, term := range track.Terms {
-			fmt.Print("(", term.Radius, ",")
-			fmt.Print(term.Gap, ",(")
-			fmt.Print(term.Term.X-float32(minx+border), ",")
-			fmt.Print(term.Term.Y-float32(miny+border), ",")
-			fmt.Print(term.Term.Z, "),[")
+			fmt.Print("(", term.Radius, ",", term.Gap, ",(", term.Term.X-float32(minx+border), ",",
+				term.Term.Y-float32(miny+border), ",", term.Term.Z, "),[")
 			for j, cord := range term.Shape {
-				fmt.Print("(", cord.X, ",")
-				fmt.Print(cord.Y, ")")
+				fmt.Print("(", cord.X, ",", cord.Y, ")")
 				if j != (len(term.Shape) - 1) {
 					fmt.Print(",")
 				}

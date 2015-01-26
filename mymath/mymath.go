@@ -410,21 +410,21 @@ func Collide_lines_2d(pl1_p1, pl1_p2, pl2_p1, pl2_p2 *Point) bool {
 	return true
 }
 
-func Collide_thick_lines_2d(tl1_p1, tl1_p2, tl2_p1, tl2_p2 *Point, tl_r float32) bool {
+func Collide_thick_lines_2d(tl1_p1, tl1_p2, tl2_p1, tl2_p2 *Point, r float32) bool {
 	if Collide_lines_2d(tl1_p1, tl1_p2, tl2_p1, tl2_p2) {
 		return true
 	}
-	tl_r *= tl_r
-	if Distance_squared_to_line_2d(tl2_p1, tl1_p1, tl1_p2) <= tl_r {
+	r *= r
+	if Distance_squared_to_line_2d(tl2_p1, tl1_p1, tl1_p2) <= r {
 		return true
 	}
-	if Distance_squared_to_line_2d(tl2_p2, tl1_p1, tl1_p2) <= tl_r {
+	if Distance_squared_to_line_2d(tl2_p2, tl1_p1, tl1_p2) <= r {
 		return true
 	}
-	if Distance_squared_to_line_2d(tl1_p1, tl2_p1, tl2_p2) <= tl_r {
+	if Distance_squared_to_line_2d(tl1_p1, tl2_p1, tl2_p2) <= r {
 		return true
 	}
-	if Distance_squared_to_line_2d(tl1_p2, tl2_p1, tl2_p2) <= tl_r {
+	if Distance_squared_to_line_2d(tl1_p2, tl2_p1, tl2_p2) <= r {
 		return true
 	}
 	return false

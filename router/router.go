@@ -105,16 +105,16 @@ func (s by_group) Less(i, j int) bool {
 func insert_sort_point(nodes *sort_points, node *Point, mark float32) *sort_points {
 	//ascending order
 	n := *nodes
-	mn := &sort_point{mark, node}
+	mn := sort_point{mark, node}
 	for i := 0; i < len(n); i++ {
 		if n[i].mark >= mark {
 			n = append(n, nil)
 			copy(n[i+1:], n[i:])
-			n[i] = mn
+			n[i] = &mn
 			return &n
 		}
 	}
-	n = append(n, mn)
+	n = append(n, &mn)
 	return &n
 }
 
@@ -162,7 +162,7 @@ func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
 	self.verbosity = verb
 	self.quantization = quant * res
 	self.minz = minz
-	self.layers = layer.NewLayers(layer.Dims{self.width*3, self.height*3, self.depth}, 3.0/float32(res))
+	self.layers = layer.NewLayers(layer.Dims{self.width * 3, self.height * 3, self.depth}, 3.0/float32(res))
 	self.netlist = nil
 	self.width *= res
 	self.height *= res
@@ -184,7 +184,7 @@ func (self *Pcb) Copy() *Pcb {
 	new_pcb.verbosity = self.verbosity
 	new_pcb.quantization = self.quantization
 	new_pcb.minz = self.minz
-	new_pcb.layers = layer.NewLayers(layer.Dims{self.width*3, self.height*3, self.depth}, 3.0/float32(self.resolution))
+	new_pcb.layers = layer.NewLayers(layer.Dims{self.width * 3, self.height * 3, self.depth}, 3.0/float32(self.resolution))
 	new_pcb.netlist = nil
 	for _, net := range self.netlist {
 		new_pcb.netlist = append(new_pcb.netlist, net.copy())
@@ -337,10 +337,10 @@ func (self *Pcb) all_marked(vectors *Vectorss, node *Point) *sort_points {
 		ny := y + v.Y
 		nz := z + v.Z
 		if (0 <= nx) && (nx < self.width) && (0 <= ny) && (ny < self.height) && (0 <= nz) && (nz < self.depth) {
-			n := &Point{nx, ny, nz}
-			mark := self.get_node(n)
+			n := Point{nx, ny, nz}
+			mark := self.get_node(&n)
 			if mark != 0 {
-				yield = append(yield, &sort_point{float32(mark), n})
+				yield = append(yield, &sort_point{float32(mark), &n})
 			}
 		}
 	}
@@ -357,9 +357,9 @@ func (self *Pcb) all_not_marked(vectors *Vectorss, node *Point) *Vectors {
 		ny := y + v.Y
 		nz := z + v.Z
 		if (0 <= nx) && (nx < self.width) && (0 <= ny) && (ny < self.height) && (0 <= nz) && (nz < self.depth) {
-			n := &Point{nx, ny, nz}
-			if self.get_node(n) == 0 {
-				yield = append(yield, n)
+			n := Point{nx, ny, nz}
+			if self.get_node(&n) == 0 {
+				yield = append(yield, &n)
 			}
 		}
 	}
@@ -510,7 +510,7 @@ func newnet(terms Terminals, radius, via, gap float32, pcb Pcb) *net {
 	return &n
 }
 
-//scale terminal positions for resolution of grid
+//scale terminals for resolution of grid
 func scale_terminals(terms Terminals, res int) Terminals {
 	for i := 0; i < len(terms); i++ {
 		terms[i].Radius *= float32(res)
@@ -609,14 +609,14 @@ func (self *net) add_terminal_collision_lines() {
 	for _, node := range self.terminals {
 		r, g, x, y, shape := node.Radius, node.Gap, node.Term.X, node.Term.Y, node.Shape
 		if len(shape) == 0 {
-			self.pcb.layers.Add_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth-1)}, r, g)
+			self.pcb.layers.Add_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth - 1)}, r, g)
 		} else {
 			for z := 0; z < self.pcb.depth; z++ {
-				p1 := &mymath.Point{x + shape[0].X, y + shape[0].Y, float32(z)}
+				p1 := mymath.Point{x + shape[0].X, y + shape[0].Y, float32(z)}
 				for i := 1; i < len(shape); i++ {
 					p0 := p1
-					p1 = &mymath.Point{x + shape[i].X, y + shape[i].Y, float32(z)}
-					self.pcb.layers.Add_line(p0, p1, r, g)
+					p1 = mymath.Point{x + shape[i].X, y + shape[i].Y, float32(z)}
+					self.pcb.layers.Add_line(&p0, &p1, r, g)
 				}
 			}
 		}
@@ -628,14 +628,14 @@ func (self *net) sub_terminal_collision_lines() {
 	for _, node := range self.terminals {
 		r, g, x, y, shape := node.Radius, node.Gap, node.Term.X, node.Term.Y, node.Shape
 		if len(shape) == 0 {
-			self.pcb.layers.Sub_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth-1)}, r, g)
+			self.pcb.layers.Sub_line(&mymath.Point{x, y, 0}, &mymath.Point{x, y, float32(self.pcb.depth - 1)}, r, g)
 		} else {
 			for z := 0; z < self.pcb.depth; z++ {
-				p1 := &mymath.Point{x + shape[0].X, y + shape[0].Y, float32(z)}
+				p1 := mymath.Point{x + shape[0].X, y + shape[0].Y, float32(z)}
 				for i := 1; i < len(shape); i++ {
 					p0 := p1
-					p1 = &mymath.Point{x + shape[i].X, y + shape[i].Y, float32(z)}
-					self.pcb.layers.Sub_line(p0, p1, r, g)
+					p1 = mymath.Point{x + shape[i].X, y + shape[i].Y, float32(z)}
+					self.pcb.layers.Sub_line(&p0, &p1, r, g)
 				}
 			}
 		}
@@ -787,18 +787,11 @@ func (self *net) route(minz bool) bool {
 //output net, terminals and paths, for viewer app
 func (self *net) print_net() {
 	scale := 1.0 / float32(self.pcb.resolution)
-	fmt.Print("[", self.radius*scale, ",")
-	fmt.Print(self.via*scale, ",")
-	fmt.Print(self.gap*scale, ",[")
+	fmt.Print("[", self.radius*scale, ",", self.via*scale, ",", self.gap*scale, ",[")
 	for i, t := range self.terminals {
-		fmt.Print("(", t.Radius*scale, ",")
-		fmt.Print(t.Gap*scale, ",(")
-		fmt.Print(t.Term.X*scale, ",")
-		fmt.Print(t.Term.Y*scale, ",")
-		fmt.Print(t.Term.Z, "),[")
+		fmt.Print("(", t.Radius*scale, ",", t.Gap*scale, ",(", t.Term.X*scale, ",", t.Term.Y*scale, ",", t.Term.Z, "),[")
 		for j, c := range t.Shape {
-			fmt.Print("(", c.X*scale, ",")
-			fmt.Print(c.Y*scale, ")")
+			fmt.Print("(", c.X*scale, ",", c.Y*scale, ")")
 			if j != (len(t.Shape) - 1) {
 				fmt.Print(",")
 			}
@@ -814,9 +807,7 @@ func (self *net) print_net() {
 		for j, p := range path {
 			psp := self.pcb.grid_to_space_point(p)
 			sp := *psp
-			fmt.Print("(", sp[0]*scale, ",")
-			fmt.Print(sp[1]*scale, ",")
-			fmt.Print(sp[2], ")")
+			fmt.Print("(", sp[0]*scale, ",",sp[1]*scale, ",",sp[2], ")")
 			if j != (len(path) - 1) {
 				fmt.Print(",")
 			}
