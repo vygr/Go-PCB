@@ -306,7 +306,7 @@ func main() {
 						px, _ := strconv.ParseFloat(*cords[i].value, 32)
 						py, _ := strconv.ParseFloat(*cords[i+1].value, 32)
 						px /= 1000.0
-						py /= 1000.0
+						py /= -1000.0
 						if px < minx {
 							minx = px
 						}
@@ -350,7 +350,7 @@ func main() {
 						pin.y, _ = strconv.ParseFloat(*image_node.branches[3].value, 32)
 					}
 					pin.x /= 1000.0
-					pin.y /= 1000.0
+					pin.y /= -1000.0
 					component.pin_map[*pin.name] = &pin
 				}
 			}
@@ -373,9 +373,9 @@ func main() {
 						x2, _ := strconv.ParseFloat(*padstack_node.branches[0].branches[4].value, 32)
 						y2, _ := strconv.ParseFloat(*padstack_node.branches[0].branches[5].value, 32)
 						x1 /= 1000.0
-						y1 /= 1000.0
+						y1 /= -1000.0
 						x2 /= 1000.0
-						y2 /= 1000.0
+						y2 /= -1000.0
 						points = append(points, point{x1, y1})
 						points = append(points, point{x2, y2})
 					}
@@ -386,9 +386,9 @@ func main() {
 						x2, _ := strconv.ParseFloat(*padstack_node.branches[0].branches[3].value, 32)
 						y2, _ := strconv.ParseFloat(*padstack_node.branches[0].branches[4].value, 32)
 						x1 /= 1000.0
-						y1 /= 1000.0
+						y1 /= -1000.0
 						x2 /= 1000.0
-						y2 /= 1000.0
+						y2 /= -1000.0
 						points = append(points, point{x1, y1})
 						points = append(points, point{x2, y1})
 						points = append(points, point{x2, y2})
@@ -420,7 +420,7 @@ func main() {
 					instance.angle, _ = strconv.ParseFloat(*component_node.branches[4].value, 32)
 					instance.angle = instance.angle * (math.Pi / 180.0)
 					instance.x /= 1000.0
-					instance.y /= 1000.0
+					instance.y /= -1000.0
 					instance_map[*instance_name] = &instance
 				}
 			}
