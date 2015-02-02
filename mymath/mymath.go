@@ -431,14 +431,43 @@ func Collide_thick_lines_2d(tl1_p1, tl1_p2, tl2_p1, tl2_p2 *Point, r float32) bo
 }
 
 //generic path stuff
-func Thicken_path_2d(path Points, radius float32, capstyle, joinstyle int) Points {
+func Circle_lines_2d(p *Point, radius float32, resolution int) Points {
+	out_points := Points{}
+	rvx, rvy := float32(0.0), radius
+	for i := 0; i <= resolution; i++ {
+		angle := float64((float32(i) * math.Pi * 2.0) / float32(resolution))
+		s := float32(math.Sin(angle))
+		c := float32(math.Cos(angle))
+		rv := &Point{rvx*c - rvy*s, rvx*s + rvy*c}
+		out_points = append(out_points, Sub_2d(p, rv))
+	}
+	out_points = append(out_points, out_points[0])
+	return out_points
+}
+
+func Circle_triangles_2d(p *Point, radius float32, resolution int) Points {
+	out_points := Points{}
+	rvx, rvy := float32(0.0), radius
+	for i := 0; i <= resolution; i++ {
+		angle := float64((float32(i) * math.Pi * 2.0) / float32(resolution))
+		s := float32(math.Sin(angle))
+		c := float32(math.Cos(angle))
+		rv := &Point{rvx*c - rvy*s, rvx*s + rvy*c}
+		out_points = append(out_points, p)
+		out_points = append(out_points, Sub_2d(p, rv))
+	}
+	out_points = append(out_points, out_points[0])
+	out_points = append(out_points, out_points[1])
+	return out_points
+}
+
+func Thicken_path_lines_2d(path Points, radius float32, capstyle, joinstyle, resolution int) Points {
 	if radius == 0.0 {
 		radius = 0.00000001
 	}
 	index := 0
 	step := 1
 	out_points := Points{}
-	resolution := int(math.Pi*radius) + 1
 	for {
 		p1 := path[index]
 		index += step
@@ -516,5 +545,107 @@ func Thicken_path_2d(path Points, radius float32, capstyle, joinstyle int) Point
 		step = -step
 		index += step
 	}
+	out_points = append(out_points, out_points[0])
+	return out_points
+}
+
+func Thicken_path_triangles_2d(path Points, radius float32, capstyle, joinstyle, resolution int) Points {
+	if radius == 0.0 {
+		radius = 0.00000001
+	}
+	index := 0
+	step := 1
+	out_points := Points{}
+	for {
+		p1 := path[index]
+		index += step
+		p2 := path[index]
+		index += step
+		l2_v := Sub_2d(p2, p1)
+		l2_pv := Perp_2d(l2_v)
+		l2_npv := Norm_2d(l2_pv)
+		rv := Scale_2d(l2_npv, radius)
+		switch {
+		case capstyle == 0:
+			//butt cap
+			out_points = append(out_points, p1)
+			out_points = append(out_points, Sub_2d(p1, rv))
+			out_points = append(out_points, p1)
+			out_points = append(out_points, Add_2d(p1, rv))
+		case capstyle == 1:
+			//square cap
+			p0 := Add_2d(p1, Perp_2d(rv))
+			out_points = append(out_points, p0)
+			out_points = append(out_points, Sub_2d(p0, rv))
+			out_points = append(out_points, p0)
+			out_points = append(out_points, Add_2d(p0, rv))
+		case capstyle == 2:
+			//triangle cap
+			out_points = append(out_points, p1)
+			out_points = append(out_points, Sub_2d(p1, rv))
+			out_points = append(out_points, p1)
+			out_points = append(out_points, Add_2d(p1, Perp_2d(rv)))
+			out_points = append(out_points, p1)
+			out_points = append(out_points, Add_2d(p1, rv))
+		default:
+			//round cap
+			rvd := *rv
+			rvx, rvy := rvd[0], rvd[1]
+			for i := 0; i <= resolution; i++ {
+				angle := float64((float32(i) * math.Pi) / float32(resolution))
+				s := float32(math.Sin(angle))
+				c := float32(math.Cos(angle))
+				rv := &Point{rvx*c - rvy*s, rvx*s + rvy*c}
+				out_points = append(out_points, p1)
+				out_points = append(out_points, Sub_2d(p1, rv))
+			}
+		}
+		for (index != -1) && (index != len(path)) {
+			p1, l1_v, l1_npv := p2, l2_v, l2_npv
+			p2 = path[index]
+			index += step
+			l2_v = Sub_2d(p2, p1)
+			l2_pv = Perp_2d(l2_v)
+			l2_npv = Norm_2d(l2_pv)
+			nbv := Norm_2d(Scale_2d(Add_2d(l1_npv, l2_npv), 0.5))
+			c := Dot_2d(nbv, Norm_2d(l1_v))
+			switch {
+			case (c <= 0) || (joinstyle == 0):
+				//mitre join
+				s := float32(math.Sin(math.Acos(float64(c))))
+				bv := Scale_2d(nbv, radius/s)
+				out_points = append(out_points, p1)
+				out_points = append(out_points, Add_2d(p1, bv))
+			case joinstyle == 1:
+				//bevel join
+				out_points = append(out_points, p1)
+				out_points = append(out_points, Add_2d(p1, Scale_2d(l1_npv, radius)))
+				out_points = append(out_points, p1)
+				out_points = append(out_points, Add_2d(p1, Scale_2d(l2_npv, radius)))
+			default:
+				//round join
+				rv := Scale_2d(l1_npv, radius)
+				rvd := *rv
+				rvx, rvy := rvd[0], rvd[1]
+				theta := float32(math.Acos(float64(Dot_2d(l1_npv, l2_npv))))
+				segs := int((theta/float32(math.Pi))*float32(resolution)) + 1
+				for i := 0; i <= segs; i++ {
+					angle := float64((float32(i) * theta) / float32(segs))
+					s := float32(math.Sin(angle))
+					c := float32(math.Cos(angle))
+					rv := &Point{rvx*c - rvy*s, rvx*s + rvy*c}
+					out_points = append(out_points, p1)
+					out_points = append(out_points, Add_2d(p1, rv))
+				}
+			}
+		}
+		if step < 0 {
+			break
+		}
+		step = -step
+		index += step
+	}
+	out_points = append(out_points, out_points[0])
+	out_points = append(out_points, out_points[1])
 	return out_points
 }

@@ -39,6 +39,8 @@ type Tpoint struct {
 	Y float32
 	Z float32
 }
+type Path []*Tpoint
+type Paths []Path
 
 type Cord struct {
 	X float32
@@ -59,6 +61,14 @@ type Track struct {
 	Via    float32
 	Gap    float32
 	Terms  Terminals
+}
+
+type Output struct {
+	Radius float32
+	Via    float32
+	Gap    float32
+	Terms  Terminals
+	Paths  Paths
 }
 
 //////////////////////////

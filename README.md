@@ -3,18 +3,14 @@ Go-PCB
 
 Go PCB router and solver.
 
-There are two viewer apps, view.py requires aggDraw module to be installed, view_mpl.py
-requires matplotlib module to be installed. The matplotlib viwer is much more heavyweight
-than the former. Both are available with the Python version of this app.
-
 Example command line would be:
 
-go run pcb.go --v 1 netlist.pcb | python view.py
+go run pcb.go --v 1 netlist.pcb | go run view.go
 
 You can drop the output to a file and view it as an animation with:
 
 go run pcb.go --v 1 netlist.pcb 1 > anim
-python view.py anim
+go run view.go anim
 
 -h or --help for help on either app.
 
