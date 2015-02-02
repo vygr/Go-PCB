@@ -217,6 +217,7 @@ func read_track(r *bufio.Reader) (*router.Output, bool) {
 	return &router.Output{float32(radius), float32(via), float32(gap), *terminals, *paths}, false
 }
 
+//load shader progs
 func make_program(vert_file_name, frag_file_name string) gl.Program {
 	vert_source, err := ioutil.ReadFile(vert_file_name)
 	if err != nil {
@@ -231,6 +232,7 @@ func make_program(vert_file_name, frag_file_name string) gl.Program {
 	return glh.NewProgram(vs, fs)
 }
 
+//draw a line strip polygon
 func draw_polygon(data mymath.Points) {
 	vertex_buffer_data := make([]float32, len(data)*2, len(data)*2)
 	for i := 0; i < len(data); i++ {
@@ -243,6 +245,7 @@ func draw_polygon(data mymath.Points) {
 	gl.DrawArrays(gl.LINE_STRIP, 0, len(vertex_buffer_data)/2)
 }
 
+//draw a triangle strip polygon
 func draw_filled_polygon(data mymath.Points) {
 	vertex_buffer_data := make([]float32, len(data)*2, len(data)*2)
 	for i := 0; i < len(data); i++ {
@@ -277,16 +280,15 @@ func main() {
 	}
 	reader := bufio.NewReader(arg_infile)
 
+	//read dimensions of the pcb
 	dimensions := read_dimentions(reader)
 	pcb_width := dimensions.Width
 	pcb_height := dimensions.Height
 	pcb_depth := dimensions.Depth
 	width := (pcb_width + (margin * 2)) * arg_s
 	height := (pcb_height + (margin * 2)) * arg_s
-	if arg_o == 1 {
-		height *= pcb_depth
-	}
 
+	//create window
 	if !glfw.Init() {
 		fmt.Fprintf(os.Stderr, "Can't open GLFW")
 		return
@@ -296,37 +298,40 @@ func main() {
 	glfw.WindowHint(glfw.ContextVersionMinor, 3)
 	glfw.WindowHint(glfw.OpenglProfile, glfw.OpenglCoreProfile)
 	glfw.WindowHint(glfw.OpenglForwardCompatible, glfw.True) // needed for macs
-
 	window, err := glfw.CreateWindow(width, height, "PCB Viewer", nil, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return
 	}
 	window.MakeContextCurrent()
-
-	gl.Init()
-	gl.GetError()
 	window.SetInputMode(glfw.StickyKeys, 1)
 
+	//set gl settings
+	gl.Init()
+	gl.GetError()
 	gl.ClearColor(0.0, 0.0, 0.0, 0.0)
-
 	gl.Enable(gl.BLEND)
-	gl.DepthFunc(gl.LESS)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	gl.LineWidth(1.0)
 
+	//create vertex array
 	vertex_array := gl.GenVertexArray()
 	vertex_array.Bind()
 
+	//load shaders and get address of shader variables
 	prog := make_program("VertexShader.vert", "FragmentShader.frag")
 	vert_color_id := prog.GetUniformLocation("vert_color")
-	vert_aspect_id := prog.GetUniformLocation("vert_aspect")
+	vert_scale_id := prog.GetUniformLocation("vert_scale")
 	vert_offset_id := prog.GetUniformLocation("vert_offset")
+
+	//use the loaded shader program
 	prog.Use()
 
-	vert_aspect_id.Uniform2f(2.0/float32(width), -2.0/float32(height))
+	//set aspect and offset for 2D drawing
+	vert_scale_id.Uniform2f(2.0/float32(width), -2.0/float32(height))
 	vert_offset_id.Uniform2f(-1.0, 1.0)
 
+	//setup vertex buffer ready for use
 	vertex_buffer := gl.GenBuffer()
 	vertex_attrib := gl.AttribLocation(0)
 	vertex_buffer.Bind(gl.ARRAY_BUFFER)
@@ -334,11 +339,13 @@ func main() {
 	vertex_attrib.AttribPointer(2, gl.FLOAT, false, 0, nil)
 
 	for {
+		//exit of ESC key or close button pressed
+		glfw.PollEvents()
 		if (window.GetKey(glfw.KeyEscape) == glfw.Press) || window.ShouldClose() {
 			break
 		}
-		gl.Clear(gl.COLOR_BUFFER_BIT)
 
+		//load track and exit if last track
 		tracks := []*router.Output{}
 		for {
 			track, eof := read_track(reader)
@@ -351,6 +358,7 @@ func main() {
 			break
 		}
 
+		//scale acording to window size
 		scale := float32(arg_s)
 		border := float32(margin * arg_s)
 		for _, track := range tracks {
@@ -381,6 +389,10 @@ func main() {
 			}
 		}
 
+		//clear background
+		gl.Clear(gl.COLOR_BUFFER_BIT)
+
+		//draw paths for each layer
 		colors := [...]float32{
 			1.0, 0.0, 0.0,
 			0.0, 1.0, 0.0,
@@ -420,6 +432,8 @@ func main() {
 				}
 			}
 		}
+
+		//draw terminals and vias
 		vert_color_id.Uniform4f(1.0, 1.0, 1.0, 1.0)
 		for _, track := range tracks {
 			for _, path := range track.Paths {
@@ -446,19 +460,21 @@ func main() {
 			}
 		}
 
+		//show window just drawn
 		window.SwapBuffers()
-		glfw.PollEvents()
 	}
 
+	//wait till exit or close button pressed, 'hold on last frame'
 	for {
+		glfw.PollEvents()
 		if (window.GetKey(glfw.KeyEscape) == glfw.Press) || window.ShouldClose() {
 			break
 		}
-		glfw.PollEvents()
 	}
 
+	//clean up
 	vertex_buffer.Delete()
-	prog.Delete()
 	vertex_array.Delete()
+	prog.Delete()
 	glfw.Terminate()
 }
