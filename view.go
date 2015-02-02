@@ -345,7 +345,7 @@ func main() {
 			break
 		}
 
-		//load track and exit if last track
+		//load track and exit if no track loaded
 		tracks := []*router.Output{}
 		for {
 			track, eof := read_track(reader)
@@ -358,7 +358,7 @@ func main() {
 			break
 		}
 
-		//scale acording to window size
+		//scale track acording to window size
 		scale := float32(arg_s)
 		border := float32(margin * arg_s)
 		for _, track := range tracks {
@@ -408,22 +408,24 @@ func main() {
 				for _, path := range track.Paths {
 					start := 0
 					end := 0
-					for end = 0; end < (len(path) - 1); end++ {
+					for end = 0; end < len(path); end++ {
 						if path[start].Z != path[end].Z {
 							if path[start].Z == float32(depth) {
-								points := make([]*mymath.Point, len(path[start:end]), len(path[start:end]))
-								for i, cord := range path[start:end] {
-									points[i] = &mymath.Point{cord.X, cord.Y}
+								if end-start > 1 {
+									points := make([]*mymath.Point, len(path[start:end]), len(path[start:end]))
+									for i, cord := range path[start:end] {
+										points[i] = &mymath.Point{cord.X, cord.Y}
+									}
+									draw_filled_polygon(mymath.Thicken_path_triangles_2d(points, track.Radius, 3, 2, 16))
 								}
-								draw_filled_polygon(mymath.Thicken_path_triangles_2d(points, track.Radius, 3, 2, 16))
 							}
 							start = end
 						}
 					}
-					if len(path)-start > 1 {
-						if path[start].Z == float32(depth) {
-							points := make([]*mymath.Point, len(path[start:]), len(path[start:]))
-							for i, cord := range path[start:] {
+					if path[start].Z == float32(depth) {
+						if end-start > 1 {
+							points := make([]*mymath.Point, len(path[start:end]), len(path[start:end]))
+							for i, cord := range path[start:end] {
 								points[i] = &mymath.Point{cord.X, cord.Y}
 							}
 							draw_filled_polygon(mymath.Thicken_path_triangles_2d(points, track.Radius, 3, 2, 16))
