@@ -432,32 +432,32 @@ func Collide_thick_lines_2d(tl1_p1, tl1_p2, tl2_p1, tl2_p2 *Point, r float32) bo
 
 //generic path stuff
 func Circle_lines_2d(p *Point, radius float32, resolution int) *Points {
-	out_points := Points{}
+	out_points := make(Points, resolution+1, resolution*1)
 	rvx, rvy := float32(0.0), radius
 	for i := 0; i <= resolution; i++ {
 		angle := float64((float32(i) * math.Pi * 2.0) / float32(resolution))
 		s := float32(math.Sin(angle))
 		c := float32(math.Cos(angle))
 		rv := &Point{rvx*c - rvy*s, rvx*s + rvy*c}
-		out_points = append(out_points, Sub_2d(p, rv))
+		out_points[i] = Sub_2d(p, rv)
 	}
-	out_points = append(out_points, out_points[0])
+	out_points[resolution] = out_points[0]
 	return &out_points
 }
 
 func Circle_triangles_2d(p *Point, radius float32, resolution int) *Points {
-	out_points := Points{}
+	out_points := make(Points, resolution*2+2, resolution*2+2)
 	rvx, rvy := float32(0.0), radius
 	for i := 0; i <= resolution; i++ {
 		angle := float64((float32(i) * math.Pi * 2.0) / float32(resolution))
 		s := float32(math.Sin(angle))
 		c := float32(math.Cos(angle))
 		rv := &Point{rvx*c - rvy*s, rvx*s + rvy*c}
-		out_points = append(out_points, p)
-		out_points = append(out_points, Sub_2d(p, rv))
+		out_points[i*2] = p
+		out_points[i*2+1] = Sub_2d(p, rv)
 	}
-	out_points = append(out_points, out_points[0])
-	out_points = append(out_points, out_points[1])
+	out_points[resolution*2] = out_points[0]
+	out_points[resolution*2+1] = out_points[1]
 	return &out_points
 }
 
@@ -650,4 +650,48 @@ func Thicken_path_triangles_2d(pathp *Points, radius float32, capstyle, joinstyl
 	out_points = append(out_points, out_points[0])
 	out_points = append(out_points, out_points[1])
 	return &out_points
+}
+
+func recursive_bezier(x1, y1, x2, y2, x3, y3, x4, y4 float32, pointsp *Points, distance_tolerance float32) *Points {
+	//calculate all the mid-points of the line segments
+	x12 := (x1 + x2) * 0.5
+	y12 := (y1 + y2) * 0.5
+	x23 := (x2 + x3) * 0.5
+	y23 := (y2 + y3) * 0.5
+	x34 := (x3 + x4) * 0.5
+	y34 := (y3 + y4) * 0.5
+	x123 := (x12 + x23) * 0.5
+	y123 := (y12 + y23) * 0.5
+	x234 := (x23 + x34) * 0.5
+	y234 := (y23 + y34) * 0.5
+	x1234 := (x123 + x234) * 0.5
+	y1234 := (y123 + y234) * 0.5
+
+	//try to approximate the full cubic curve by a single straight line
+	dx := x4 - x1
+	dy := y4 - y1
+
+	d2 := float32(math.Abs(float64(((x2-x4)*dy - (y2-y4)*dx))))
+	d3 := float32(math.Abs(float64(((x3-x4)*dy - (y3-y4)*dx))))
+
+	points := *pointsp
+	if (d2+d3)*(d2+d3) < distance_tolerance*(dx*dx+dy*dy) {
+		points = append(points, &Point{x1234, y1234})
+		return &points
+	}
+
+	//continue subdivision
+	points = *recursive_bezier(x1, y1, x12, y12, x123, y123, x1234, y1234, &points, distance_tolerance)
+	points = *recursive_bezier(x1234, y1234, x234, y234, x34, y34, x4, y4, &points, distance_tolerance)
+	return &points
+}
+
+//create bezier path
+func Bezier_path(pp1, pp2, pp3, pp4 *Point, distance_tolerance float32) *Points {
+	p1, p2, p3, p4 := *pp1, *pp2, *pp3, *pp4
+	points := Points{}
+	points = append(points, &Point{p1[0], p1[1]})
+	points = *recursive_bezier(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], p4[0], p4[1], &points, distance_tolerance)
+	points = append(points, &Point{p4[0], p4[1]})
+	return &points
 }
