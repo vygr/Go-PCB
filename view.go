@@ -233,33 +233,53 @@ func make_program(vert_file_name, frag_file_name string) gl.Program {
 }
 
 //draw a line strip polygon
-func draw_polygon(data mymath.Points) {
+func draw_polygon(offsetp *mymath.Point, datap *mymath.Points) {
+	data := *datap
+	offset := *offsetp
 	vertex_buffer_data := make([]float32, len(data)*2, len(data)*2)
 	for i := 0; i < len(data); i++ {
 		pp := data[i]
 		p := *pp
-		vertex_buffer_data[i*2] = p[0]
-		vertex_buffer_data[i*2+1] = p[1]
+		vertex_buffer_data[i*2] = p[0] + offset[0]
+		vertex_buffer_data[i*2+1] = p[1] + offset[1]
 	}
 	gl.BufferData(gl.ARRAY_BUFFER, len(vertex_buffer_data)*4, vertex_buffer_data, gl.STATIC_DRAW)
 	gl.DrawArrays(gl.LINE_STRIP, 0, len(vertex_buffer_data)/2)
 }
 
 //draw a triangle strip polygon
-func draw_filled_polygon(data mymath.Points) {
+func draw_filled_polygon(offsetp *mymath.Point, datap *mymath.Points) {
+	data := *datap
+	offset := *offsetp
 	vertex_buffer_data := make([]float32, len(data)*2, len(data)*2)
 	for i := 0; i < len(data); i++ {
 		pp := data[i]
 		p := *pp
-		vertex_buffer_data[i*2] = p[0]
-		vertex_buffer_data[i*2+1] = p[1]
+		vertex_buffer_data[i*2] = p[0] + offset[0]
+		vertex_buffer_data[i*2+1] = p[1] + offset[1]
 	}
 	gl.BufferData(gl.ARRAY_BUFFER, len(vertex_buffer_data)*4, vertex_buffer_data, gl.STATIC_DRAW)
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, len(vertex_buffer_data)/2)
 }
 
+//create circle polygon
+var circle_map map[float32]*mymath.Points
+
+func create_filled_circle(radius float32) *mymath.Points {
+	circle_points := circle_map[radius]
+	if circle_points != nil {
+		return circle_points
+	}
+	circle_points = mymath.Circle_triangles_2d(&mymath.Point{0.0, 0.0}, radius, 32)
+	circle_map[radius] = circle_points
+	return circle_points
+}
+
 func main() {
 	runtime.LockOSThread()
+
+	//setup globals
+	circle_map = map[float32]*mymath.Points{}
 
 	//command line flags and defaults etc
 	arg_infile := os.Stdin
@@ -287,6 +307,9 @@ func main() {
 	pcb_depth := dimensions.Depth
 	width := (pcb_width + (margin * 2)) * arg_s
 	height := (pcb_height + (margin * 2)) * arg_s
+	if arg_o == 1 {
+		height *= pcb_depth
+	}
 
 	//create window
 	if !glfw.Init() {
@@ -392,71 +415,202 @@ func main() {
 		//clear background
 		gl.Clear(gl.COLOR_BUFFER_BIT)
 
-		//draw paths for each layer
-		colors := [...]float32{
-			1.0, 0.0, 0.0,
-			0.0, 1.0, 0.0,
-			0.0, 0.0, 1.0,
-			1.0, 1.0, 0.0,
-			0.0, 1.0, 1.0,
-			1.0, 0.0, 1.0,
-		}
-		for depth := pcb_depth - 1; depth > -1; depth-- {
-			color := (depth % (len(colors) / 3)) * 3
-			vert_color_id.Uniform4f(colors[color], colors[color+1], colors[color+2], 0.5)
+		if arg_o == 0 {
+			//draw paths for each layer
+			colors := [...]float32{
+				1.0, 0.0, 0.0,
+				0.0, 1.0, 0.0,
+				0.0, 0.0, 1.0,
+				1.0, 1.0, 0.0,
+				0.0, 1.0, 1.0,
+				1.0, 0.0, 1.0,
+			}
+			for depth := pcb_depth - 1; depth > -1; depth-- {
+				color := (depth % (len(colors) / 3)) * 3
+				vert_color_id.Uniform4f(colors[color], colors[color+1], colors[color+2], 0.5)
+				for _, track := range tracks {
+					for _, path := range track.Paths {
+						start := 0
+						end := 0
+						for end = 0; end < len(path); end++ {
+							if path[start].Z != path[end].Z {
+								if path[start].Z == float32(depth) {
+									if end-start > 1 {
+										points := make(mymath.Points, len(path[start:end]), len(path[start:end]))
+										for i, cord := range path[start:end] {
+											points[i] = &mymath.Point{cord.X, cord.Y}
+										}
+										draw_filled_polygon(&mymath.Point{0.0, 0.0},
+											mymath.Thicken_path_triangles_2d(&points, track.Radius, 3, 2, 16))
+									}
+								}
+								start = end
+							}
+						}
+						if path[start].Z == float32(depth) {
+							if end-start > 1 {
+								points := make(mymath.Points, len(path[start:end]), len(path[start:end]))
+								for i, cord := range path[start:end] {
+									points[i] = &mymath.Point{cord.X, cord.Y}
+								}
+								draw_filled_polygon(&mymath.Point{0.0, 0.0},
+									mymath.Thicken_path_triangles_2d(&points, track.Radius, 3, 2, 16))
+							}
+						}
+					}
+				}
+			}
+			//draw terminals and vias
+			vert_color_id.Uniform4f(1.0, 1.0, 1.0, 1.0)
 			for _, track := range tracks {
 				for _, path := range track.Paths {
-					start := 0
-					end := 0
-					for end = 0; end < len(path); end++ {
-						if path[start].Z != path[end].Z {
-							if path[start].Z == float32(depth) {
-								if end-start > 1 {
-									points := make([]*mymath.Point, len(path[start:end]), len(path[start:end]))
-									for i, cord := range path[start:end] {
-										points[i] = &mymath.Point{cord.X, cord.Y}
-									}
-									draw_filled_polygon(mymath.Thicken_path_triangles_2d(points, track.Radius, 3, 2, 16))
-								}
-							}
-							start = end
+					for i := 0; i < (len(path) - 1); i++ {
+						if path[i].Z != path[i+1].Z {
+							draw_filled_polygon(&mymath.Point{path[i].X, path[i].Y},
+								create_filled_circle(track.Via))
 						}
 					}
-					if path[start].Z == float32(depth) {
-						if end-start > 1 {
-							points := make([]*mymath.Point, len(path[start:end]), len(path[start:end]))
-							for i, cord := range path[start:end] {
+				}
+				for _, term := range track.Terms {
+					if len(term.Shape) == 0 {
+						draw_filled_polygon(&mymath.Point{term.Term.X, term.Term.Y},
+							create_filled_circle(term.Radius))
+					} else {
+						points := make(mymath.Points, len(term.Shape), len(term.Shape))
+						for i, cord := range term.Shape {
+							points[i] = &mymath.Point{cord.X, cord.Y}
+						}
+						if term.Radius != 0 {
+							draw_filled_polygon(&mymath.Point{0.0, 0.0},
+								mymath.Thicken_path_triangles_2d(&points, term.Radius, 3, 2, 16))
+						} else {
+							draw_filled_polygon(&mymath.Point{0.0, 0.0}, &points)
+						}
+					}
+				}
+			}
+		} else {
+			//draw paths for each layer in white
+			vert_color_id.Uniform4f(1.0, 1.0, 1.0, 1.0)
+			for depth := pcb_depth - 1; depth > -1; depth-- {
+				yoffset := float32((pcb_height + (margin * 2)) * arg_s * depth)
+				for _, track := range tracks {
+					for _, path := range track.Paths {
+						start := 0
+						end := 0
+						for end = 0; end < len(path); end++ {
+							if path[start].Z != path[end].Z {
+								if path[start].Z == float32(depth) {
+									if end-start > 1 {
+										points := make(mymath.Points, len(path[start:end]), len(path[start:end]))
+										for i, cord := range path[start:end] {
+											points[i] = &mymath.Point{cord.X, cord.Y}
+										}
+										draw_filled_polygon(&mymath.Point{0.0, yoffset},
+											mymath.Thicken_path_triangles_2d(&points, track.Radius+track.Gap, 3, 2, 16))
+									}
+								}
+								start = end
+							}
+						}
+						if path[start].Z == float32(depth) {
+							if end-start > 1 {
+								points := make(mymath.Points, len(path[start:end]), len(path[start:end]))
+								for i, cord := range path[start:end] {
+									points[i] = &mymath.Point{cord.X, cord.Y}
+								}
+								draw_filled_polygon(&mymath.Point{0.0, yoffset},
+									mymath.Thicken_path_triangles_2d(&points, track.Radius+track.Gap, 3, 2, 16))
+							}
+						}
+					}
+				}
+				//draw terminals and vias in white
+				for _, track := range tracks {
+					for _, path := range track.Paths {
+						for i := 0; i < (len(path) - 1); i++ {
+							if path[i].Z != path[i+1].Z {
+								draw_filled_polygon(&mymath.Point{path[i].X, path[i].Y + yoffset},
+									create_filled_circle(track.Via+track.Gap))
+							}
+						}
+					}
+					for _, term := range track.Terms {
+						if len(term.Shape) == 0 {
+							draw_filled_polygon(&mymath.Point{term.Term.X, term.Term.Y + yoffset},
+								create_filled_circle(term.Radius+term.Gap))
+						} else {
+							points := make(mymath.Points, len(term.Shape), len(term.Shape))
+							for i, cord := range term.Shape {
 								points[i] = &mymath.Point{cord.X, cord.Y}
 							}
-							draw_filled_polygon(mymath.Thicken_path_triangles_2d(points, track.Radius, 3, 2, 16))
+							draw_filled_polygon(&mymath.Point{0.0, yoffset},
+								mymath.Thicken_path_triangles_2d(&points, term.Radius+term.Gap, 3, 2, 16))
 						}
 					}
 				}
 			}
-		}
-
-		//draw terminals and vias
-		vert_color_id.Uniform4f(1.0, 1.0, 1.0, 1.0)
-		for _, track := range tracks {
-			for _, path := range track.Paths {
-				for i := 0; i < (len(path) - 1); i++ {
-					if path[i].Z != path[i+1].Z {
-						draw_filled_polygon(mymath.Circle_triangles_2d(&mymath.Point{path[i].X, path[i].Y}, track.Via, 32))
+			//draw paths for each layer in black
+			vert_color_id.Uniform4f(0.0, 0.0, 0.0, 1.0)
+			for depth := pcb_depth - 1; depth > -1; depth-- {
+				yoffset := float32((pcb_height + (margin * 2)) * arg_s * depth)
+				for _, track := range tracks {
+					for _, path := range track.Paths {
+						start := 0
+						end := 0
+						for end = 0; end < len(path); end++ {
+							if path[start].Z != path[end].Z {
+								if path[start].Z == float32(depth) {
+									if end-start > 1 {
+										points := make(mymath.Points, len(path[start:end]), len(path[start:end]))
+										for i, cord := range path[start:end] {
+											points[i] = &mymath.Point{cord.X, cord.Y}
+										}
+										draw_filled_polygon(&mymath.Point{0.0, yoffset},
+											mymath.Thicken_path_triangles_2d(&points, track.Radius, 3, 2, 16))
+									}
+								}
+								start = end
+							}
+						}
+						if path[start].Z == float32(depth) {
+							if end-start > 1 {
+								points := make(mymath.Points, len(path[start:end]), len(path[start:end]))
+								for i, cord := range path[start:end] {
+									points[i] = &mymath.Point{cord.X, cord.Y}
+								}
+								draw_filled_polygon(&mymath.Point{0.0, yoffset},
+									mymath.Thicken_path_triangles_2d(&points, track.Radius, 3, 2, 16))
+							}
+						}
 					}
 				}
-			}
-			for _, term := range track.Terms {
-				if len(term.Shape) == 0 {
-					draw_filled_polygon(mymath.Circle_triangles_2d(&mymath.Point{term.Term.X, term.Term.Y}, term.Radius, 32))
-				} else {
-					points := make([]*mymath.Point, len(term.Shape), len(term.Shape))
-					for i, cord := range term.Shape {
-						points[i] = &mymath.Point{cord.X, cord.Y}
+				//draw terminals and vias in black
+				for _, track := range tracks {
+					for _, path := range track.Paths {
+						for i := 0; i < (len(path) - 1); i++ {
+							if path[i].Z != path[i+1].Z {
+								draw_filled_polygon(&mymath.Point{path[i].X, path[i].Y + yoffset},
+									create_filled_circle(track.Via))
+							}
+						}
 					}
-					if term.Radius != 0 {
-						draw_filled_polygon(mymath.Thicken_path_triangles_2d(points, term.Radius, 3, 2, 16))
-					} else {
-						draw_filled_polygon(points)
+					for _, term := range track.Terms {
+						if len(term.Shape) == 0 {
+							draw_filled_polygon(&mymath.Point{term.Term.X, term.Term.Y + yoffset},
+								create_filled_circle(term.Radius))
+						} else {
+							points := make(mymath.Points, len(term.Shape), len(term.Shape))
+							for i, cord := range term.Shape {
+								points[i] = &mymath.Point{cord.X, cord.Y}
+							}
+							if term.Radius != 0 {
+								draw_filled_polygon(&mymath.Point{0.0, yoffset},
+									mymath.Thicken_path_triangles_2d(&points, term.Radius, 3, 2, 16))
+							} else {
+								draw_filled_polygon(&mymath.Point{0.0, yoffset}, &points)
+							}
+						}
 					}
 				}
 			}

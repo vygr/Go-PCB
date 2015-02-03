@@ -431,7 +431,7 @@ func Collide_thick_lines_2d(tl1_p1, tl1_p2, tl2_p1, tl2_p2 *Point, r float32) bo
 }
 
 //generic path stuff
-func Circle_lines_2d(p *Point, radius float32, resolution int) Points {
+func Circle_lines_2d(p *Point, radius float32, resolution int) *Points {
 	out_points := Points{}
 	rvx, rvy := float32(0.0), radius
 	for i := 0; i <= resolution; i++ {
@@ -442,10 +442,10 @@ func Circle_lines_2d(p *Point, radius float32, resolution int) Points {
 		out_points = append(out_points, Sub_2d(p, rv))
 	}
 	out_points = append(out_points, out_points[0])
-	return out_points
+	return &out_points
 }
 
-func Circle_triangles_2d(p *Point, radius float32, resolution int) Points {
+func Circle_triangles_2d(p *Point, radius float32, resolution int) *Points {
 	out_points := Points{}
 	rvx, rvy := float32(0.0), radius
 	for i := 0; i <= resolution; i++ {
@@ -458,13 +458,14 @@ func Circle_triangles_2d(p *Point, radius float32, resolution int) Points {
 	}
 	out_points = append(out_points, out_points[0])
 	out_points = append(out_points, out_points[1])
-	return out_points
+	return &out_points
 }
 
-func Thicken_path_lines_2d(path Points, radius float32, capstyle, joinstyle, resolution int) Points {
+func Thicken_path_lines_2d(pathp *Points, radius float32, capstyle, joinstyle, resolution int) *Points {
 	if radius == 0.0 {
 		radius = 0.00000001
 	}
+	path := *pathp
 	index := 0
 	step := 1
 	out_points := Points{}
@@ -546,13 +547,14 @@ func Thicken_path_lines_2d(path Points, radius float32, capstyle, joinstyle, res
 		index += step
 	}
 	out_points = append(out_points, out_points[0])
-	return out_points
+	return &out_points
 }
 
-func Thicken_path_triangles_2d(path Points, radius float32, capstyle, joinstyle, resolution int) Points {
+func Thicken_path_triangles_2d(pathp *Points, radius float32, capstyle, joinstyle, resolution int) *Points {
 	if radius == 0.0 {
 		radius = 0.00000001
 	}
+	path := *pathp
 	index := 0
 	step := 1
 	out_points := Points{}
@@ -647,5 +649,5 @@ func Thicken_path_triangles_2d(path Points, radius float32, capstyle, joinstyle,
 	}
 	out_points = append(out_points, out_points[0])
 	out_points = append(out_points, out_points[1])
-	return out_points
+	return &out_points
 }
