@@ -20,7 +20,10 @@ type Points []*Point
 //public functions
 //////////////////
 
+///////////////////////////////
 //generic distance metric stuff
+///////////////////////////////
+
 func Manhattan_distance(pp1, pp2 *Point) float32 {
 	p1 := *pp1
 	p2 := *pp2
@@ -78,7 +81,10 @@ func Random_distance(pp1, pp2 *Point) float32 {
 	return float32(rand.Float32())
 }
 
+///////////////////////
 //generic vector stuff
+///////////////////////
+
 func Sign(x int) int {
 	if x == 0 {
 		return 0
@@ -181,7 +187,10 @@ func Distance_squared_to_line(pp, pp1, pp2 *Point) float32 {
 	return Distance_squared(pp, Add(pp1, Scale(lv, c1/c2)))
 }
 
+///////////////////////
 //specific vector stuff
+///////////////////////
+
 func Equal_2d(pp1, pp2 *Point) bool {
 	p1 := *pp1
 	p2 := *pp2
@@ -430,9 +439,12 @@ func Collide_thick_lines_2d(tl1_p1, tl1_p2, tl2_p1, tl2_p2 *Point, r float32) bo
 	return false
 }
 
+////////////////////
 //generic path stuff
-func Circle_lines_2d(p *Point, radius float32, resolution int) *Points {
-	out_points := make(Points, resolution+1, resolution*1)
+////////////////////
+
+func Circle_as_lines(p *Point, radius float32, resolution int) *Points {
+	out_points := make(Points, resolution+1, resolution+1)
 	rvx, rvy := float32(0.0), radius
 	for i := 0; i <= resolution; i++ {
 		angle := float64((float32(i) * math.Pi * 2.0) / float32(resolution))
@@ -445,23 +457,25 @@ func Circle_lines_2d(p *Point, radius float32, resolution int) *Points {
 	return &out_points
 }
 
-func Circle_triangles_2d(p *Point, radius float32, resolution int) *Points {
+func Circle_as_tristrip(p *Point, radius1, radius2 float32, resolution int) *Points {
 	out_points := make(Points, resolution*2+2, resolution*2+2)
-	rvx, rvy := float32(0.0), radius
+	rvx1, rvy1 := float32(0.0), radius1
+	rvx2, rvy2 := float32(0.0), radius2
 	for i := 0; i <= resolution; i++ {
 		angle := float64((float32(i) * math.Pi * 2.0) / float32(resolution))
 		s := float32(math.Sin(angle))
 		c := float32(math.Cos(angle))
-		rv := &Point{rvx*c - rvy*s, rvx*s + rvy*c}
-		out_points[i*2] = p
-		out_points[i*2+1] = Sub_2d(p, rv)
+		rv1 := &Point{rvx1*c - rvy1*s, rvx1*s + rvy1*c}
+		rv2 := &Point{rvx2*c - rvy2*s, rvx2*s + rvy2*c}
+		out_points[i*2] = Sub_2d(p, rv1)
+		out_points[i*2+1] = Sub_2d(p, rv2)
 	}
 	out_points[resolution*2] = out_points[0]
 	out_points[resolution*2+1] = out_points[1]
 	return &out_points
 }
 
-func Thicken_path_lines_2d(pathp *Points, radius float32, capstyle, joinstyle, resolution int) *Points {
+func Thicken_path_as_lines(pathp *Points, radius float32, capstyle, joinstyle, resolution int) *Points {
 	if radius == 0.0 {
 		radius = 0.00000001
 	}
@@ -550,7 +564,7 @@ func Thicken_path_lines_2d(pathp *Points, radius float32, capstyle, joinstyle, r
 	return &out_points
 }
 
-func Thicken_path_triangles_2d(pathp *Points, radius float32, capstyle, joinstyle, resolution int) *Points {
+func Thicken_path_as_tristrip(pathp *Points, radius float32, capstyle, joinstyle, resolution int) *Points {
 	if radius == 0.0 {
 		radius = 0.00000001
 	}
@@ -687,7 +701,7 @@ func recursive_bezier(x1, y1, x2, y2, x3, y3, x4, y4 float32, pointsp *Points, d
 }
 
 //create bezier path
-func Bezier_path(pp1, pp2, pp3, pp4 *Point, distance_tolerance float32) *Points {
+func Bezier_path_as_lines(pp1, pp2, pp3, pp4 *Point, distance_tolerance float32) *Points {
 	p1, p2, p3, p4 := *pp1, *pp2, *pp3, *pp4
 	points := Points{}
 	points = append(points, &Point{p1[0], p1[1]})

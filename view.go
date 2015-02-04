@@ -270,7 +270,7 @@ func create_filled_circle(radius float32) *mymath.Points {
 	if circle_points != nil {
 		return circle_points
 	}
-	circle_points = mymath.Circle_triangles_2d(&mymath.Point{0.0, 0.0}, radius, 32)
+	circle_points = mymath.Circle_as_tristrip(&mymath.Point{0.0, 0.0}, radius, 0, 32)
 	circle_map[radius] = circle_points
 	return circle_points
 }
@@ -441,7 +441,7 @@ func main() {
 											points[i] = &mymath.Point{cord.X, cord.Y}
 										}
 										draw_filled_polygon(&mymath.Point{0.0, 0.0},
-											mymath.Thicken_path_triangles_2d(&points, track.Radius, 3, 2, 16))
+											mymath.Thicken_path_as_tristrip(&points, track.Radius, 3, 2, 16))
 									}
 								}
 								start = end
@@ -454,7 +454,7 @@ func main() {
 									points[i] = &mymath.Point{cord.X, cord.Y}
 								}
 								draw_filled_polygon(&mymath.Point{0.0, 0.0},
-									mymath.Thicken_path_triangles_2d(&points, track.Radius, 3, 2, 16))
+									mymath.Thicken_path_as_tristrip(&points, track.Radius, 3, 2, 16))
 							}
 						}
 					}
@@ -482,7 +482,7 @@ func main() {
 						}
 						if term.Radius != 0 {
 							draw_filled_polygon(&mymath.Point{0.0, 0.0},
-								mymath.Thicken_path_triangles_2d(&points, term.Radius, 3, 2, 16))
+								mymath.Thicken_path_as_tristrip(&points, term.Radius, 3, 2, 16))
 						} else {
 							draw_filled_polygon(&mymath.Point{0.0, 0.0}, &points)
 						}
@@ -507,7 +507,7 @@ func main() {
 											points[i] = &mymath.Point{cord.X, cord.Y}
 										}
 										draw_filled_polygon(&mymath.Point{0.0, yoffset},
-											mymath.Thicken_path_triangles_2d(&points, track.Radius+track.Gap, 3, 2, 16))
+											mymath.Thicken_path_as_tristrip(&points, track.Radius+track.Gap, 3, 2, 16))
 									}
 								}
 								start = end
@@ -520,7 +520,7 @@ func main() {
 									points[i] = &mymath.Point{cord.X, cord.Y}
 								}
 								draw_filled_polygon(&mymath.Point{0.0, yoffset},
-									mymath.Thicken_path_triangles_2d(&points, track.Radius+track.Gap, 3, 2, 16))
+									mymath.Thicken_path_as_tristrip(&points, track.Radius+track.Gap, 3, 2, 16))
 							}
 						}
 					}
@@ -545,7 +545,7 @@ func main() {
 								points[i] = &mymath.Point{cord.X, cord.Y}
 							}
 							draw_filled_polygon(&mymath.Point{0.0, yoffset},
-								mymath.Thicken_path_triangles_2d(&points, term.Radius+term.Gap, 3, 2, 16))
+								mymath.Thicken_path_as_tristrip(&points, term.Radius+term.Gap, 3, 2, 16))
 						}
 					}
 				}
@@ -567,7 +567,7 @@ func main() {
 											points[i] = &mymath.Point{cord.X, cord.Y}
 										}
 										draw_filled_polygon(&mymath.Point{0.0, yoffset},
-											mymath.Thicken_path_triangles_2d(&points, track.Radius, 3, 2, 16))
+											mymath.Thicken_path_as_tristrip(&points, track.Radius, 3, 2, 16))
 									}
 								}
 								start = end
@@ -580,7 +580,7 @@ func main() {
 									points[i] = &mymath.Point{cord.X, cord.Y}
 								}
 								draw_filled_polygon(&mymath.Point{0.0, yoffset},
-									mymath.Thicken_path_triangles_2d(&points, track.Radius, 3, 2, 16))
+									mymath.Thicken_path_as_tristrip(&points, track.Radius, 3, 2, 16))
 							}
 						}
 					}
@@ -606,7 +606,7 @@ func main() {
 							}
 							if term.Radius != 0 {
 								draw_filled_polygon(&mymath.Point{0.0, yoffset},
-									mymath.Thicken_path_triangles_2d(&points, term.Radius, 3, 2, 16))
+									mymath.Thicken_path_as_tristrip(&points, term.Radius, 3, 2, 16))
 							} else {
 								draw_filled_polygon(&mymath.Point{0.0, yoffset}, &points)
 							}
