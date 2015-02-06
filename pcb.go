@@ -27,8 +27,6 @@ func gen_vectors(vec_range, x_range, y_range int) *[]*router.Point {
 			}
 		}
 	}
-	yield = append(yield, &router.Point{0, 0, -1})
-	yield = append(yield, &router.Point{0, 0, 1})
 	return &yield
 }
 
@@ -176,7 +174,7 @@ func main() {
 	var arg_t float64
 	var arg_v int
 	var arg_s int
-	var arg_z bool
+	var arg_z int
 	var arg_r int
 	var arg_q int
 	var arg_d int
@@ -185,7 +183,7 @@ func main() {
 	var arg_yr int
 	flag.Float64Var(&arg_t, "t", 600.0, "timeout in seconds, default 600")
 	flag.IntVar(&arg_v, "v", 0, "verbosity level 0..1, default 0")
-	flag.BoolVar(&arg_z, "z", false, "minimize vias")
+	flag.IntVar(&arg_z, "z", 0, "vias cost, 0..100, default 0")
 	flag.IntVar(&arg_s, "s", 1, "number of samples, default 1")
 	flag.IntVar(&arg_r, "r", 1, "grid resolution 1..4, default 1")
 	flag.IntVar(&arg_d, "d", 0, "distance metric 0..5, default 0.\n\t0 -> manhattan\n\t1 -> squared_euclidean\n\t2 -> euclidean\n\t3 -> chebyshev\n\t4 -> reciprocal\n\t5 -> random")
@@ -253,11 +251,11 @@ func main() {
 		if cost <= best_cost {
 			best_cost = cost
 			best_pcb = pcb.Copy()
+			best_pcb.Print_stats()
 		}
 	}
 	if best_pcb != nil {
 		best_pcb.Print_netlist()
-		best_pcb.Print_stats()
 	} else {
 		fmt.Println("[]")
 	}

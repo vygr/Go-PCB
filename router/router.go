@@ -113,7 +113,6 @@ func (s by_group) Less(i, j int) bool {
 
 //insert sort_point in ascending order
 func insert_sort_point(nodes *sort_points, node *Point, mark float32) *sort_points {
-	//ascending order
 	n := *nodes
 	mn := sort_point{mark, node}
 	for i := 0; i < len(n); i++ {
@@ -140,7 +139,7 @@ type Pcb struct {
 	resolution            int
 	verbosity             int
 	quantization          int
-	minz                  bool
+	viascost              int
 	layers                *layer.Layers
 	netlist               nets
 	nodes                 []int
@@ -154,14 +153,14 @@ type Pcb struct {
 ////////////////
 
 func NewPcb(dims *Dims, rfvs, rpvs *Vectorss, dfunc func(*mymath.Point, *mymath.Point) float32,
-	res, verb, quant int, minz bool) *Pcb {
+	res, verb, quant, viascost int) *Pcb {
 	p := Pcb{}
-	p.Init(dims, rfvs, rpvs, dfunc, res, verb, quant, minz)
+	p.Init(dims, rfvs, rpvs, dfunc, res, verb, quant, viascost)
 	return &p
 }
 
 func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
-	dfunc func(*mymath.Point, *mymath.Point) float32, res, verb, quant int, minz bool) {
+	dfunc func(*mymath.Point, *mymath.Point) float32, res, verb, quant, viascost int) {
 	self.width = dims.Width
 	self.height = dims.Height
 	self.depth = dims.Depth
@@ -171,7 +170,7 @@ func (self *Pcb) Init(dims *Dims, rfvs, rpvs *Vectorss,
 	self.resolution = res
 	self.verbosity = verb
 	self.quantization = quant * res
-	self.minz = minz
+	self.viascost = viascost
 	self.layers = layer.NewLayers(layer.Dims{self.width * 3, self.height * 3, self.depth}, 3.0/float32(res))
 	self.netlist = nil
 	self.width *= res
@@ -193,7 +192,7 @@ func (self *Pcb) Copy() *Pcb {
 	new_pcb.resolution = self.resolution
 	new_pcb.verbosity = self.verbosity
 	new_pcb.quantization = self.quantization
-	new_pcb.minz = self.minz
+	new_pcb.viascost = self.viascost
 	new_pcb.layers = layer.NewLayers(layer.Dims{self.width * 3, self.height * 3, self.depth}, 3.0/float32(self.resolution))
 	new_pcb.netlist = nil
 	for _, net := range self.netlist {
@@ -220,7 +219,7 @@ func (self *Pcb) Route(timeout float64) bool {
 	index := 0
 	start_time := time.Now()
 	for index < len(self.netlist) {
-		if self.netlist[index].route(self.minz) {
+		if self.netlist[index].route() {
 			index += 1
 		} else {
 			if index == 0 {
@@ -396,21 +395,26 @@ func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal *Point,
 }
 
 //generate all grid points surrounding point that are not shorting with an existing track
-func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius, via, gap float32) *Vectors {
+func (self *Pcb) all_vias_not_shorting(gather *Vectors, node *Point, via, gap float32) *Vectors {
 	yield := make(Vectors, 0, 16)
 	np := self.grid_to_space_point(node)
 	for _, new_node := range *gather {
 		nnp := self.grid_to_space_point(new_node)
-		if node.Z != new_node.Z {
-			//this is a via direction
-			if !self.layers.Hit_line(np, nnp, via, gap) {
-				yield = append(yield, new_node)
-			}
-		} else {
-			//not a via direction
-			if !self.layers.Hit_line(np, nnp, radius, gap) {
-				yield = append(yield, new_node)
-			}
+		if !self.layers.Hit_line(np, nnp, via, gap) {
+			yield = append(yield, new_node)
+		}
+	}
+	return &yield
+}
+
+//generate all grid points surrounding point that are not shorting with an existing track
+func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius, gap float32) *Vectors {
+	yield := make(Vectors, 0, 16)
+	np := self.grid_to_space_point(node)
+	for _, new_node := range *gather {
+		nnp := self.grid_to_space_point(new_node)
+		if !self.layers.Hit_line(np, nnp, radius, gap) {
+			yield = append(yield, new_node)
 		}
 	}
 	return &yield
@@ -418,10 +422,14 @@ func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius, via, gap
 
 //flood fill distances from starts till ends covered
 func (self *Pcb) mark_distances(vectors *Vectorss, radius, via, gap float32, starts *map[Point]bool, ends *Vectors) {
+	via_vectors := &Vectorss{
+		Vectors{&Point{0, 0, -1}, &Point{0, 0, 1}},
+		Vectors{&Point{0, 0, -1}, &Point{0, 0, 1}}}
 	distance := 1
 	nodes := *starts
-	for len(nodes) > 0 {
-		for node, _ := range nodes {
+	vias_nodes := map[int]*map[Point]bool{}
+	for (len(nodes) > 0) || (len(vias_nodes) > 0) {
+		for node := range nodes {
 			self.set_node(&node, distance)
 		}
 		flag := true
@@ -435,10 +443,28 @@ func (self *Pcb) mark_distances(vectors *Vectorss, radius, via, gap float32, sta
 			break
 		}
 		new_nodes := map[Point]bool{}
-		for node, _ := range nodes {
-			for _, new_node := range *self.all_not_shorting(self.all_not_marked(vectors, &node), &node, radius, via, gap) {
+		for node := range nodes {
+			for _, new_node := range *self.all_not_shorting(self.all_not_marked(vectors, &node), &node, radius, gap) {
 				new_nodes[*new_node] = true
 			}
+		}
+		new_vias_nodes := map[Point]bool{}
+		for node := range nodes {
+			for _, new_vias_node := range *self.all_vias_not_shorting(self.all_not_marked(via_vectors, &node), &node, via, gap) {
+				new_vias_nodes[*new_vias_node] = true
+			}
+		}
+		if len(new_vias_nodes) > 0 {
+			vias_nodes[distance+self.viascost] = &new_vias_nodes
+		}
+		delay_nodes := vias_nodes[distance]
+		if delay_nodes != nil {
+			for vias_node := range *delay_nodes {
+				if self.get_node(&vias_node) == 0 {
+					new_nodes[vias_node] = true
+				}
+			}
+			delete(vias_nodes, distance)
 		}
 		nodes = new_nodes
 		distance++
@@ -719,9 +745,13 @@ func (self *net) optimise_paths(paths Vectorss) Vectorss {
 }
 
 //backtrack path from ends to starts
-func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, via, gap float32, minz bool) (Vectors, bool) {
+func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, via, gap float32) (Vectors, bool) {
+	via_vectors := &Vectorss{
+		Vectors{&Point{0, 0, -1}, &Point{0, 0, 1}},
+		Vectors{&Point{0, 0, -1}, &Point{0, 0, 1}}}
 	visited := *vis
 	path := Vectors{end}
+	dv := &mymath.Point{0, 0, 0}
 	for {
 		path_node := path[len(path)-1]
 		if visited[*path_node] {
@@ -731,7 +761,12 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, via, ga
 		nearer_nodes := make(Vectors, 0)
 		for _, node := range *self.pcb.all_not_shorting(
 			self.pcb.all_nearer_sorted(self.pcb.routing_path_vectors, path_node, end, self.pcb.dfunc),
-			path_node, radius, via, gap) {
+			path_node, radius, gap) {
+			nearer_nodes = append(nearer_nodes, node)
+		}
+		for _, node := range *self.pcb.all_vias_not_shorting(
+			self.pcb.all_nearer_sorted(via_vectors, path_node, end, self.pcb.dfunc),
+			path_node, via, gap) {
 			nearer_nodes = append(nearer_nodes, node)
 		}
 		if len(nearer_nodes) == 0 {
@@ -739,20 +774,24 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, via, ga
 			return path, false
 		}
 		next_node := nearer_nodes[0]
-		if minz {
-			for _, node := range nearer_nodes {
-				if node.Z == path_node.Z {
+		dv2 := mymath.Norm_3d(self.pcb.grid_to_space_point(path_node))
+		if !visited[*next_node] {
+			for i := 1; i < len(nearer_nodes); i++ {
+				node := nearer_nodes[i]
+				dv1 := mymath.Norm_3d(self.pcb.grid_to_space_point(node))
+				if mymath.Equal_3d(dv, mymath.Sub_3d(dv1, dv2)) {
 					next_node = node
-					break
 				}
 			}
 		}
+		dv1 := mymath.Norm_3d(self.pcb.grid_to_space_point(next_node))
+		dv = mymath.Norm_3d(mymath.Sub_3d(dv1, dv2))
 		path = append(path, next_node)
 	}
 }
 
 //attempt to route this net on the current boards state
-func (self *net) route(minz bool) bool {
+func (self *net) route() bool {
 	if self.radius == 0.0 {
 		//unused terminals track !
 		return true
@@ -777,7 +816,7 @@ func (self *net) route(minz bool) bool {
 			end_nodes = insert_sort_point(end_nodes, node, float32(self.pcb.get_node(node)))
 		}
 		e = *end_nodes
-		path, success := self.backtrack_path(&visited, e[0].node, self.radius, self.via, self.gap, minz)
+		path, success := self.backtrack_path(&visited, e[0].node, self.radius, self.via, self.gap)
 		self.pcb.unmark_distances()
 		if !success {
 			self.remove()
@@ -817,7 +856,7 @@ func (self *net) print_net() {
 		for j, p := range path {
 			psp := self.pcb.grid_to_space_point(p)
 			sp := *psp
-			fmt.Print("(", sp[0]*scale, ",",sp[1]*scale, ",",sp[2], ")")
+			fmt.Print("(", sp[0]*scale, ",", sp[1]*scale, ",", sp[2], ")")
 			if j != (len(path) - 1) {
 				fmt.Print(",")
 			}
