@@ -395,19 +395,6 @@ func (self *Pcb) all_nearer_sorted(vectors *Vectorss, node, goal *Point,
 }
 
 //generate all grid points surrounding point that are not shorting with an existing track
-func (self *Pcb) all_vias_not_shorting(gather *Vectors, node *Point, via, gap float32) *Vectors {
-	yield := make(Vectors, 0, 16)
-	np := self.grid_to_space_point(node)
-	for _, new_node := range *gather {
-		nnp := self.grid_to_space_point(new_node)
-		if !self.layers.Hit_line(np, nnp, via, gap) {
-			yield = append(yield, new_node)
-		}
-	}
-	return &yield
-}
-
-//generate all grid points surrounding point that are not shorting with an existing track
 func (self *Pcb) all_not_shorting(gather *Vectors, node *Point, radius, gap float32) *Vectors {
 	yield := make(Vectors, 0, 16)
 	np := self.grid_to_space_point(node)
@@ -450,7 +437,7 @@ func (self *Pcb) mark_distances(vectors *Vectorss, radius, via, gap float32, sta
 		}
 		new_vias_nodes := map[Point]bool{}
 		for node := range nodes {
-			for _, new_vias_node := range *self.all_vias_not_shorting(self.all_not_marked(via_vectors, &node), &node, via, gap) {
+			for _, new_vias_node := range *self.all_not_shorting(self.all_not_marked(via_vectors, &node), &node, via, gap) {
 				new_vias_nodes[*new_vias_node] = true
 			}
 		}
@@ -764,7 +751,7 @@ func (self *net) backtrack_path(vis *map[Point]bool, end *Point, radius, via, ga
 			path_node, radius, gap) {
 			nearer_nodes = append(nearer_nodes, node)
 		}
-		for _, node := range *self.pcb.all_vias_not_shorting(
+		for _, node := range *self.pcb.all_not_shorting(
 			self.pcb.all_nearer_sorted(via_vectors, path_node, end, self.pcb.dfunc),
 			path_node, via, gap) {
 			nearer_nodes = append(nearer_nodes, node)
