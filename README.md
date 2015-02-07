@@ -3,9 +3,10 @@ Go-PCB
 
 Go PCB router and solver.
 
-Example command line would be:
+Example command lines would be:
 
-go run pcb.go --v 1 netlist.pcb | go run view.go
+go run pcb.go --v 1 netlist.pcb | go run view.go --o 1 --s 7
+go run dsn2pcb.go test1.dsn | go run pcb.go --v 1 --z 8 --q 10 --r 2 | go run view.go
 
 You can drop the output to a file and view it as an animation with:
 

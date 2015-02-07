@@ -230,7 +230,7 @@ func (self *Pcb) Route(timeout float64) bool {
 			} else {
 				pos := 0
 				self.netlist, pos = hoist_net(self.netlist, index)
-				if hoisted_nets[self.netlist[pos]] {
+				if (pos == index) || hoisted_nets[self.netlist[pos]] {
 					if pos != 0 {
 						self.netlist[pos].area = self.netlist[pos-1].area
 						self.netlist, pos = hoist_net(self.netlist, pos)
