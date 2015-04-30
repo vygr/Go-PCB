@@ -687,8 +687,8 @@ func main() {
 	}
 
 	//clean up
-//	vertex_buffer.Delete()
-//	vertex_array.Delete()
-//	prog.Delete()
+	gl.DeleteBuffers(1, &vertex_buffer)
+	gl.DeleteVertexArrays(1, &vertex_array)
+	gl.DeleteProgram(prog)
 	glfw.Terminate()
 }
