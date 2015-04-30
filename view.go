@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"./mymath"
 	"./router"
 	"bufio"
@@ -12,9 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-gl/gl"
-	glfw "github.com/go-gl/glfw3"
-	"github.com/go-gl/glh"
+	"github.com/go-gl/gl/v4.1-core/gl"
+	glfw "github.com/go-gl/glfw/v3.0/glfw"
 )
 
 const (
@@ -218,7 +218,7 @@ func read_track(r *bufio.Reader) (*router.Output, bool) {
 }
 
 //load shader progs
-func make_program(vert_file_name, frag_file_name string) gl.Program {
+func make_program(vert_file_name, frag_file_name string) uint32 {
 	vert_source, err := ioutil.ReadFile(vert_file_name)
 	if err != nil {
 		panic(err)
@@ -227,9 +227,65 @@ func make_program(vert_file_name, frag_file_name string) gl.Program {
 	if err != nil {
 		panic(err)
 	}
-	vs := glh.Shader{gl.VERTEX_SHADER, string(vert_source)}
-	fs := glh.Shader{gl.FRAGMENT_SHADER, string(frag_source)}
-	return glh.NewProgram(vs, fs)
+	program, err := newProgram(string(vert_source) + "\x00", string(frag_source) + "\x00")
+	return program
+}
+
+func newProgram(vertexShaderSource, fragmentShaderSource string) (uint32, error) {
+	vertexShader, err := compileShader(vertexShaderSource, gl.VERTEX_SHADER)
+	if err != nil {
+		return 0, err
+	}
+
+	fragmentShader, err := compileShader(fragmentShaderSource, gl.FRAGMENT_SHADER)
+	if err != nil {
+		return 0, err
+	}
+
+	program := gl.CreateProgram()
+
+	gl.AttachShader(program, vertexShader)
+	gl.AttachShader(program, fragmentShader)
+	gl.LinkProgram(program)
+
+	var status int32
+	gl.GetProgramiv(program, gl.LINK_STATUS, &status)
+	if status == gl.FALSE {
+		var logLength int32
+		gl.GetProgramiv(program, gl.INFO_LOG_LENGTH, &logLength)
+
+		log := strings.Repeat("\x00", int(logLength+1))
+		gl.GetProgramInfoLog(program, logLength, nil, gl.Str(log))
+
+		return 0, errors.New(fmt.Sprintf("failed to link program: %v", log))
+	}
+
+	gl.DeleteShader(vertexShader)
+	gl.DeleteShader(fragmentShader)
+
+	return program, nil
+}
+
+func compileShader(source string, shaderType uint32) (uint32, error) {
+	shader := gl.CreateShader(shaderType)
+
+	csource := gl.Str(source)
+	gl.ShaderSource(shader, 1, &csource, nil)
+	gl.CompileShader(shader)
+
+	var status int32
+	gl.GetShaderiv(shader, gl.COMPILE_STATUS, &status)
+	if status == gl.FALSE {
+		var logLength int32
+		gl.GetShaderiv(shader, gl.INFO_LOG_LENGTH, &logLength)
+
+		log := strings.Repeat("\x00", int(logLength+1))
+		gl.GetShaderInfoLog(shader, logLength, nil, gl.Str(log))
+
+		return 0, fmt.Errorf("failed to compile %v: %v", source, log)
+	}
+
+	return shader, nil
 }
 
 //draw a line strip polygon
@@ -243,8 +299,8 @@ func draw_polygon(offsetp *mymath.Point, datap *mymath.Points) {
 		vertex_buffer_data[i*2] = p[0] + offset[0]
 		vertex_buffer_data[i*2+1] = p[1] + offset[1]
 	}
-	gl.BufferData(gl.ARRAY_BUFFER, len(vertex_buffer_data)*4, vertex_buffer_data, gl.STATIC_DRAW)
-	gl.DrawArrays(gl.LINE_STRIP, 0, len(vertex_buffer_data)/2)
+	gl.BufferData(gl.ARRAY_BUFFER, len(vertex_buffer_data)*4, gl.Ptr(vertex_buffer_data), gl.STATIC_DRAW)
+	gl.DrawArrays(gl.LINE_STRIP, 0, int32(len(vertex_buffer_data)/2))
 }
 
 //draw a triangle strip polygon
@@ -258,8 +314,8 @@ func draw_filled_polygon(offsetp *mymath.Point, datap *mymath.Points) {
 		vertex_buffer_data[i*2] = p[0] + offset[0]
 		vertex_buffer_data[i*2+1] = p[1] + offset[1]
 	}
-	gl.BufferData(gl.ARRAY_BUFFER, len(vertex_buffer_data)*4, vertex_buffer_data, gl.STATIC_DRAW)
-	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, len(vertex_buffer_data)/2)
+	gl.BufferData(gl.ARRAY_BUFFER, len(vertex_buffer_data)*4, gl.Ptr(vertex_buffer_data), gl.STATIC_DRAW)
+	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, int32(len(vertex_buffer_data)/2))
 }
 
 //create circle polygon
@@ -338,28 +394,30 @@ func main() {
 	gl.LineWidth(1.0)
 
 	//create vertex array
-	vertex_array := gl.GenVertexArray()
-	vertex_array.Bind()
+	var vertex_array uint32
+	gl.GenVertexArrays(1, &vertex_array)
+	gl.BindVertexArray(vertex_array)
 
 	//load shaders and get address of shader variables
 	prog := make_program("VertexShader.vert", "FragmentShader.frag")
-	vert_color_id := prog.GetUniformLocation("vert_color")
-	vert_scale_id := prog.GetUniformLocation("vert_scale")
-	vert_offset_id := prog.GetUniformLocation("vert_offset")
+	vert_color_id := gl.GetUniformLocation(prog, gl.Str("vert_color\x00"))
+	vert_scale_id := gl.GetUniformLocation(prog, gl.Str("vert_scale\x00"))
+	vert_offset_id := gl.GetUniformLocation(prog, gl.Str("vert_offset\x00"))
 
 	//use the loaded shader program
-	prog.Use()
+	gl.UseProgram(prog)
 
 	//set aspect and offset for 2D drawing
-	vert_scale_id.Uniform2f(2.0/float32(width), -2.0/float32(height))
-	vert_offset_id.Uniform2f(-1.0, 1.0)
+	gl.Uniform2f(vert_scale_id, 2.0/float32(width), -2.0/float32(height))
+	gl.Uniform2f(vert_offset_id, -1.0, 1.0)
 
 	//setup vertex buffer ready for use
-	vertex_buffer := gl.GenBuffer()
-	vertex_attrib := gl.AttribLocation(0)
-	vertex_buffer.Bind(gl.ARRAY_BUFFER)
-	vertex_attrib.EnableArray()
-	vertex_attrib.AttribPointer(2, gl.FLOAT, false, 0, nil)
+	var vertex_buffer uint32
+	gl.GenBuffers(1, &vertex_buffer)
+	vertex_attrib := uint32(gl.GetAttribLocation(prog, gl.Str("vert_vertex\x00")))
+	gl.BindBuffer(gl.ARRAY_BUFFER, vertex_buffer)
+	gl.EnableVertexAttribArray(vertex_attrib)
+	gl.VertexAttribPointer(vertex_attrib, 2, gl.FLOAT, false, 0, gl.PtrOffset(0))
 
 	for {
 		//exit of ESC key or close button pressed
@@ -427,7 +485,7 @@ func main() {
 			}
 			for depth := pcb_depth - 1; depth > -1; depth-- {
 				color := (depth % (len(colors) / 3)) * 3
-				vert_color_id.Uniform4f(colors[color], colors[color+1], colors[color+2], 0.5)
+				gl.Uniform4f(vert_color_id, colors[color], colors[color+1], colors[color+2], 0.5)
 				for _, track := range tracks {
 					for _, path := range track.Paths {
 						start := 0
@@ -461,7 +519,7 @@ func main() {
 				}
 			}
 			//draw terminals and vias
-			vert_color_id.Uniform4f(1.0, 1.0, 1.0, 1.0)
+			gl.Uniform4f(vert_color_id, 1.0, 1.0, 1.0, 1.0)
 			for _, track := range tracks {
 				for _, path := range track.Paths {
 					for i := 0; i < (len(path) - 1); i++ {
@@ -491,7 +549,7 @@ func main() {
 			}
 		} else {
 			//draw paths for each layer in white
-			vert_color_id.Uniform4f(1.0, 1.0, 1.0, 1.0)
+			gl.Uniform4f(vert_color_id, 1.0, 1.0, 1.0, 1.0)
 			for depth := pcb_depth - 1; depth > -1; depth-- {
 				yoffset := float32((pcb_height + (margin * 2)) * arg_s * depth)
 				for _, track := range tracks {
@@ -551,7 +609,7 @@ func main() {
 				}
 			}
 			//draw paths for each layer in black
-			vert_color_id.Uniform4f(0.0, 0.0, 0.0, 1.0)
+			gl.Uniform4f(vert_color_id, 0.0, 0.0, 0.0, 1.0)
 			for depth := pcb_depth - 1; depth > -1; depth-- {
 				yoffset := float32((pcb_height + (margin * 2)) * arg_s * depth)
 				for _, track := range tracks {
@@ -629,8 +687,8 @@ func main() {
 	}
 
 	//clean up
-	vertex_buffer.Delete()
-	vertex_array.Delete()
-	prog.Delete()
+//	vertex_buffer.Delete()
+//	vertex_array.Delete()
+//	prog.Delete()
 	glfw.Terminate()
 }

@@ -1,6 +1,6 @@
 #version 330 core
 
-layout(location = 0) in vec2 vert_vertex;
+in vec2 vert_vertex;
 
 uniform vec2 vert_scale;
 uniform vec2 vert_offset;
