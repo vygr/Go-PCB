@@ -167,7 +167,6 @@ func read_track(r *bufio.Reader) (*router.Track, bool) {
 	return &router.Track{float32(radius), float32(via), float32(gap), *terminals}, false
 }
 
-//setup first board, loop for white..black..white..black...
 func main() {
 	//command line flags and defaults etc
 	arg_infile := os.Stdin
