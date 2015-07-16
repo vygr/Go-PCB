@@ -539,8 +539,8 @@ func main() {
 	for _, track := range tracks {
 		fmt.Print("[", track.Radius, ",", track.Via, ",", track.Gap, ",[")
 		for i, term := range track.Terms {
-			fmt.Print("(", term.Radius, ",", term.Gap, ",(", term.Term.X-float32(minx+border), ",",
-				term.Term.Y-float32(miny+border), ",", term.Term.Z, "),[")
+			fmt.Print("(", term.Radius, ",", term.Gap, ",(", term.Term.X-float32(minx-border), ",",
+				term.Term.Y-float32(miny-border), ",", term.Term.Z, "),[")
 			for j, cord := range term.Shape {
 				fmt.Print("(", cord.X, ",", cord.Y, ")")
 				if j != (len(term.Shape) - 1) {
